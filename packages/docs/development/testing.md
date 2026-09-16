@@ -22,7 +22,7 @@ Core tests using SceneGraph still belong to Core. Central integration is for con
 
 Discovery already covers the destinations: `tools/unit-tests/src/shards.ts` groups tests by owner and lists each owner's canonical home (`packages/<owner>/tests`, `tests/app`, `tests/integration`) next to its legacy `tests/engine` directories, so `bun run test:unit` and the CI shards run a file from either place. Moving a domain is therefore a `git mv` plus import fixes; only a new owner or a new top-level home needs a shard entry. Do not move files into a directory the shard map does not list.
 
-Shards share one Bun process, so module-level state (a `fake-indexeddb/auto` import, an IndexedDB connection left open by `createEditorStore()`, a patched global) leaks into later files in the same shard. A package-local run (`bun test tests` inside the package) is a fresh process and will not reproduce that leak. Close what a test opens and restore what it patches.
+`test:unit:quick` runs files in Bun worker processes (`--parallel`), which is the fastest local loop. CI shards still run each group in one process; `test:unit:isolated` (`--isolate`, also run nightly) gives every file a fresh global object and is the check to run when a suite passes alone but fails in a shard. Shards share one Bun process, so module-level state (a `fake-indexeddb/auto` import, an IndexedDB connection left open by `createEditorStore()`, a patched global) leaks into later files in the same shard. A package-local run (`bun test tests` inside the package) is a fresh process and will not reproduce that leak. Close what a test opens and restore what it patches.
 
 ## Test purpose
 
@@ -73,13 +73,15 @@ Existing global-based helpers are migration debt, not the preferred API. Migrate
 
 Current commands:
 
-| Suite             | Command                  |
-| ----------------- | ------------------------ |
-| Engine/unit       | `bun run test:unit`      |
-| App browser E2E   | `bun run test`           |
-| Storybook browser | `bun run test:storybook` |
-| Figma acceptance  | `bun run test:figma`     |
-| Native WebView    | `bun run test:native`    |
+| Suite                          | Command                      |
+| ------------------------------ | ---------------------------- |
+| Engine/unit                    | `bun run test:unit`          |
+| Quick unit, parallel           | `bun run test:unit:quick`    |
+| Quick unit, per-file isolation | `bun run test:unit:isolated` |
+| App browser E2E                | `bun run test`               |
+| Storybook browser              | `bun run test:storybook`     |
+| Figma acceptance               | `bun run test:figma`         |
+| Native WebView                 | `bun run test:native`        |
 
 During implementation, run the affected unit files or one representative browser scenario. Inspect discovery changes without executing the whole suite when reorganizing files. Use the final CI gate after integration; do not rerun full suites for each edit. Report commands actually run, and distinguish focused coverage from full acceptance.
 

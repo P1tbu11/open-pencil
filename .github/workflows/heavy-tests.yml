@@ -34,3 +34,26 @@ jobs:
           bun test --timeout 180000 "${test_files[@]}"
         env:
           BUN_HEAVY_TESTS: 'true'
+
+  isolated-unit-tests:
+    name: Isolated unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup-bun
+        with:
+          lfs: 'true'
+          lfs-include: tests/fixtures/gold-preview.fig,tests/fixtures/circle-text.fig,tests/fixtures/fonts/*
+
+      - name: Build shared Core test dependency
+        run: bun --filter @open-pencil/core build
+
+      # Every file gets a fresh global object, so a suite that only passes
+      # because an earlier file initialized a codec, loaded a font or left a
+      # database open fails here instead of flaking in a PR shard.
+      - name: Quick unit tests with per-file isolation
+        run: bun run test:unit:isolated
+        env:
+          BUN_HEAVY_TESTS: 'false'

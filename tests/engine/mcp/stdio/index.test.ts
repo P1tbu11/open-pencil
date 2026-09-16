@@ -46,7 +46,7 @@ async function createStdioClient(socketPath: string, authToken: string | null) {
     env.OPENPENCIL_MCP_AUTH_TOKEN = authToken
   }
   const transport = new StdioClientTransport({
-    command: 'bun',
+    command: process.execPath,
     args: ['packages/mcp/src/stdio.ts'],
     env,
     stderr: 'pipe'
