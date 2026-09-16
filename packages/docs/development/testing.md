@@ -24,6 +24,8 @@ Discovery already covers the destinations: `tools/unit-tests/src/shards.ts` grou
 
 `test:unit:quick` runs files in Bun worker processes (`--parallel`), which is the fastest local loop. CI shards still run each group in one process; `test:unit:isolated` (`--isolate`, also run nightly) gives every file a fresh global object and is the check to run when a suite passes alone but fails in a shard. Shards share one Bun process, so module-level state (a `fake-indexeddb/auto` import, an IndexedDB connection left open by `createEditorStore()`, a patched global) leaks into later files in the same shard. A package-local run (`bun test tests` inside the package) is a fresh process and will not reproduce that leak. Close what a test opens and restore what it patches.
 
+Run `bun --filter @open-pencil/core build` before unit tests. Files under `tests/` resolve `@open-pencil/core` and its subpaths to `packages/core/src` through the root tsconfig, but package sources (`packages/dom-css/src`, `packages/mcp/src`, …) use their own tsconfig, where `@open-pencil/core/<subpath>` falls back to the package `exports` and therefore to `dist`. One process can hold both copies; only `packages/vue` maps Core to `src`. Aligning the other package tsconfigs is a packaging change (it affects `tsdown` declaration output), not a test change.
+
 ## Test purpose
 
 - Unit tests cover isolated rules and state transitions.
