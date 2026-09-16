@@ -324,7 +324,9 @@ describe('MCP stdio readiness without an open document', () => {
       socketPath: isUnix ? join(SOCKET_DIR, 'mcp-no-document.sock') : null,
       authToken: NO_DOCUMENT_AUTH_TOKEN,
       enableEval: false,
-      mcpRoot: null
+      mcpRoot: null,
+      // No app ever registers; the default 10 s wait only slows the assertion.
+      appWaitTimeoutMs: 50
     })
 
     let client: Client | undefined
