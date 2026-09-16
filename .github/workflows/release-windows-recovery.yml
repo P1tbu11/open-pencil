@@ -1,0 +1,95 @@
+name: Recover v0.15.0 Windows artifacts
+
+on:
+  workflow_dispatch:
+
+# This recovery workflow builds the immutable release source, not its own commit.
+# Remove after v0.15.0 recovery; do not retarget an existing release tag.
+permissions:
+  contents: read
+
+concurrency:
+  group: release-v0.15.0-windows-recovery
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    permissions:
+      contents: write
+    runs-on: windows-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      # Serialize updates to the existing release's shared latest.json.
+      max-parallel: 1
+      matrix:
+        target: [x86_64-pc-windows-msvc, aarch64-pc-windows-msvc]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: 7bc5c1fe2f78a68749e920f9b9b815a7e94b6203
+          persist-credentials: false
+
+      - name: Verify immutable source and existing draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          if ((git rev-parse HEAD) -ne '7bc5c1fe2f78a68749e920f9b9b815a7e94b6203') { throw 'Unexpected source commit' }
+          $release = gh release view v0.15.0 --repo open-pencil/open-pencil --json databaseId,isDraft | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot read release' }
+          if (!$release.isDraft -or $release.databaseId -ne 390032304) { throw 'Expected existing v0.15.0 draft' }
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.x
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: desktop -> target
+          key: ${{ matrix.target }}
+
+      - uses: ./.github/actions/setup-bun
+
+      - name: Runtime versions
+        timeout-minutes: 1
+        shell: pwsh
+        run: |
+          node --version
+          bun --version
+          rustc --version
+          node -p "require('@tauri-apps/cli/package.json').version"
+
+      - name: Probe bunx Tauri startup
+        timeout-minutes: 1
+        continue-on-error: true
+        run: bunx tauri --version
+
+      - name: Probe direct Bun Tauri startup
+        timeout-minutes: 1
+        continue-on-error: true
+        run: bun node_modules/@tauri-apps/cli/tauri.js --version
+
+      - name: Verify direct Node Tauri startup
+        timeout-minutes: 1
+        run: node node_modules/@tauri-apps/cli/tauri.js --version
+
+      - name: Build Windows through Node and upload to existing draft
+        timeout-minutes: 30
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD || '' }}
+        with:
+          tauriScript: node node_modules/@tauri-apps/cli/tauri.js
+          args: --target ${{ matrix.target }} --verbose
+          releaseId: 390032304
+          tagName: v0.15.0
+          releaseDraft: true
+          includeUpdaterJson: true
+          retryAttempts: 0
