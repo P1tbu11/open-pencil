@@ -18,7 +18,11 @@ For example, `packages/core/src/canvas/text/prepared.ts` maps to `packages/core/
 
 Core tests using SceneGraph still belong to Core. Central integration is for contracts without a single owning implementation, such as interoperability between published packages. Name that contract explicitly; do not use integration as a miscellaneous bucket.
 
-**Migration status:** much existing coverage remains under `tests/engine/**`, alongside package-local suites. The table is the agreed destination, not a claim that migration or runner support is complete. Until a domain migrates, extend its existing suite rather than create a second home. Move a domain together with its discovery/shard configuration and imports. Do not move files into an undiscovered directory. The repository-wide migration is separate from feature work.
+**Migration status:** much existing coverage remains under `tests/engine/**`, alongside package-local suites. The table is the agreed destination, not a claim that migration is complete. Until a domain migrates, extend its existing suite rather than create a second home. The repository-wide migration is separate from feature work.
+
+Discovery already covers the destinations: `tools/unit-tests/src/shards.ts` groups tests by owner and lists each owner's canonical home (`packages/<owner>/tests`, `tests/app`, `tests/integration`) next to its legacy `tests/engine` directories, so `bun run test:unit` and the CI shards run a file from either place. Moving a domain is therefore a `git mv` plus import fixes; only a new owner or a new top-level home needs a shard entry. Do not move files into a directory the shard map does not list.
+
+Shards share one Bun process, so module-level state (a `fake-indexeddb/auto` import, an IndexedDB connection left open by `createEditorStore()`, a patched global) leaks into later files in the same shard. A package-local run (`bun test tests` inside the package) is a fresh process and will not reproduce that leak. Close what a test opens and restore what it patches.
 
 ## Test purpose
 
