@@ -1,7 +1,9 @@
 name: Recover v0.15.0 Windows artifacts
 
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - release-windows-recovery
 
 # This recovery workflow builds the immutable release source, not its own commit.
 # Remove after v0.15.0 recovery; do not retarget an existing release tag.
