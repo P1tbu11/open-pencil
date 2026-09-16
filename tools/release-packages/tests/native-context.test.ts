@@ -1,12 +1,12 @@
 import { expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 
-import type { CommandRequest } from '@open-pencil/package-artifacts'
+import { desktopBuilds, desktopTargets } from '#release/native/catalog'
+import { ARTIFACT_TRANSFER_TIMEOUT_MS, releaseCommands } from '#release/native/commands'
+import { createReleaseContext, releaseVersion } from '#release/native/context'
+import { releasePaths } from '#release/workflow'
 
-import { desktopBuilds, desktopTargets } from '../src/native/catalog'
-import { ARTIFACT_TRANSFER_TIMEOUT_MS, releaseCommands } from '../src/native/commands'
-import { createReleaseContext, releaseVersion } from '../src/native/context'
-import { releasePaths } from '../src/workflow'
+import type { CommandRequest } from '@open-pencil/package-artifacts'
 
 const environment = {
   RELEASE_TAG: 'v0.15.0',

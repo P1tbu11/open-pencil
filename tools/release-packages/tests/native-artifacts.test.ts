@@ -3,8 +3,8 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { resolveReportedAssets } from '../src/native/artifacts'
-import { desktopAssets } from '../src/native/catalog'
+import { resolveReportedAssets } from '#release/native/artifacts'
+import { desktopAssets } from '#release/native/catalog'
 
 const expected = desktopAssets('aarch64-apple-darwin', '0.15.0')
 

@@ -2,6 +2,9 @@
   "name": "@open-pencil/release-packages",
   "private": true,
   "type": "module",
+  "imports": {
+    "#release/*": "./src/*.ts"
+  },
   "scripts": {
     "check-changelog": "bun src/check-changelog.ts",
     "build": "bun src/cli.ts build",

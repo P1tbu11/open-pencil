@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test'
 
-import { desktopAssets, desktopTargets } from '../src/native/catalog'
-import { releaseVersion, type ReleaseIdentity } from '../src/native/context'
-import { validateTargetManifests, type TargetManifest } from '../src/native/manifest'
+import { desktopAssets, desktopTargets } from '#release/native/catalog'
+import { releaseVersion, type ReleaseIdentity } from '#release/native/context'
+import { validateTargetManifests, type TargetManifest } from '#release/native/manifest'
 
 const identity: ReleaseIdentity = {
   tag: 'v0.15.0',

@@ -1,8 +1,7 @@
 import { join, resolve } from 'node:path'
 
+import { releasePaths as packageReleasePaths } from '#release/workflow'
 import * as v from 'valibot'
-
-import { releasePaths as packageReleasePaths } from '../workflow.ts'
 
 export const releaseTagSchema = v.pipe(v.string(), v.regex(/^v\d+\.\d+\.\d+$/))
 export const commitSchema = v.pipe(v.string(), v.regex(/^[a-f0-9]{40}$/))
