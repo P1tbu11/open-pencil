@@ -2,21 +2,17 @@ import { mkdtemp, readdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { createPublicationPlan } from '#release/workflow'
 import { isEqual } from 'es-toolkit'
 import * as v from 'valibot'
 
 import { ARTIFACT_TRANSFER_TIMEOUT_MS, releaseCommands } from './commands.ts'
 import { createReleaseContext } from './context.ts'
+import { assertDraftReplacement, releaseSchema } from './draft.ts'
 import { digestFile } from './manifest.ts'
 
 const { identity, repository, paths } = createReleaseContext()
 const { git, github } = releaseCommands(paths.root)
-const releaseSchema = v.object({
-  id: v.number(),
-  tag_name: v.string(),
-  draft: v.boolean(),
-  assets: v.array(v.object({ name: v.string() }))
-})
 
 const releases = v
   .parse(
@@ -25,28 +21,21 @@ const releases = v
   )
   .flat()
 const release = releases.find((entry) => entry.tag_name === identity.tag)
-if (release && !release.draft) throw new Error('Refusing to replace a published release')
 
 // Re-fetch the tag and peel annotated tags before any registry/release mutation.
 await git('fetch', 'origin', `refs/tags/${identity.tag}`)
 const actualCommit = await git('rev-parse', 'FETCH_HEAD^{commit}')
-if (actualCommit !== identity.sourceCommit) throw new Error('Release tag changed during the build')
-
 const names = (await readdir(paths.output)).sort()
-
-if (!names.includes('release-manifest.json') || !names.includes('SHA256SUMS')) {
-  throw new Error('Missing release manifest')
-}
-
-const unexpected = release?.assets.filter((asset) => !names.includes(asset.name)) ?? []
-if (unexpected.length > 0) {
-  throw new Error(
-    `Refusing to remove unexpected draft assets: ${unexpected.map((asset) => asset.name).join(', ')}`
-  )
-}
+assertDraftReplacement(release, names, actualCommit, identity)
 
 if (process.argv[2] === 'check') {
-  console.log('Draft and immutable tag verified before publication')
+  const plan = await createPublicationPlan(paths.root)
+  const published = plan.filter((entry) => entry.status === 'published')
+  if (published.length > 0) {
+    throw new Error('Release already has published npm packages; review provenance before recovery')
+  }
+
+  console.log('Draft, unpublished npm versions and immutable tag verified before publication')
   process.exit(0)
 }
 

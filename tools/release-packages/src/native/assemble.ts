@@ -2,6 +2,7 @@ import { copyFile, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import { readReleaseNotes } from '#release/release-notes'
 import { isEqual } from 'es-toolkit'
 import * as v from 'valibot'
 
@@ -24,6 +25,8 @@ const manifests = validateTargetManifests(
 )
 
 const notes = await readFile(paths.notes, 'utf8')
+const sourceNotes = await readReleaseNotes(join(paths.root, 'CHANGELOG.md'), version)
+if (notes !== sourceNotes) throw new Error('Release notes do not match the source changelog')
 const config = v.parse(
   v.object({ plugins: v.object({ updater: v.object({ pubkey: v.string() }) }) }),
   JSON.parse(await readFile(paths.tauriConfig, 'utf8'))
@@ -31,6 +34,7 @@ const config = v.parse(
 
 const temporary = await mkdtemp(join(tmpdir(), 'open-pencil-signatures-'))
 const output = paths.output
+await rm(output, { recursive: true, force: true })
 await mkdir(output, { recursive: true })
 
 const platforms: Record<string, { signature: string; url: string }> = {}
