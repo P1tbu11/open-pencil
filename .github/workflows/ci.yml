@@ -247,16 +247,7 @@ jobs:
         run: bun --filter @open-pencil/core build
 
       - name: Run ${{ matrix.group }} unit tests
-        shell: bash
-        run: |
-          mapfile -t test_files < <(bun tools/unit-tests/src/list.ts "${{ matrix.group }}")
-          if [ "${#test_files[@]}" -eq 0 ]; then
-            echo "No tests found for shard ${{ matrix.group }}"
-            exit 0
-          fi
-          bun test "${test_files[@]}"
-        env:
-          BUN_HEAVY_TESTS: 'false'
+        run: bun tools/unit-tests/src/run.ts "${{ matrix.group }}"
 
   result:
     name: CI result

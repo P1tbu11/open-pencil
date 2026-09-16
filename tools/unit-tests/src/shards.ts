@@ -10,10 +10,10 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
  *
  * Each group lists the owner's canonical test home from
  * `packages/docs/development/testing.md` (`packages/<owner>/tests`,
- * `tests/app`, `tests/integration`) next to the legacy `tests/engine/**`
- * directories that still hold most coverage. Registering the destination up
- * front keeps a domain discoverable while it migrates file by file; a path
- * that does not exist yet contributes no files. `render` is Core-owned but
+ * `tests/app`, `tests/integration`) together with the `tests/engine/**`
+ * directories it still owns, so a file is discovered from either place and a
+ * move needs no shard change. A path that does not exist yet contributes no
+ * files. `render` is Core-owned but
  * sharded separately because canvas suites parse large fixtures.
  */
 export const UNIT_TEST_GROUPS = {
