@@ -18,6 +18,7 @@
 ### Performance
 
 - Reduce editor pauses while generating recovery snapshots and exporting text-heavy `.fig` documents.
+- Recompute layout only for the pages an edit affects, instead of every page, when editing a component or its instances.
 
 ## 0.15.0 — 2026-09-16
 
