@@ -1,4 +1,4 @@
-import { computed } from 'vue'
+import { computed, watch } from 'vue'
 
 import type { SceneNode } from '@open-pencil/scene-graph'
 
@@ -10,8 +10,10 @@ import {
   type ComponentPropertyOption
 } from '#vue/controls/component-props/model'
 import { MIXED } from '#vue/controls/node-props/helpers'
+import { useUndoBatch } from '#vue/controls/undo-batch/use'
 import { useEditor } from '#vue/editor/context'
 import { useSceneComputed } from '#vue/internal/scene-computed/use'
+import { useRetainedActivity } from '#vue/lifecycle/retention/context'
 
 function variantOptions(editor: ReturnType<typeof useEditor>, instance: SceneNode, name: string) {
   return editor.getVariantOptionAvailability(instance.id, name).map(({ value, available }) => ({
@@ -23,6 +25,20 @@ function variantOptions(editor: ReturnType<typeof useEditor>, instance: SceneNod
 
 export function useComponentProperties() {
   const editor = useEditor()
+  const batch = useUndoBatch(editor.undo, editor.beginInteractiveEdit)
+  const retainedActivity = useRetainedActivity()
+  watch(() => [editor.state.currentPageId, ...editor.state.selectedIds], batch.flush, {
+    flush: 'sync'
+  })
+  if (retainedActivity) {
+    watch(
+      retainedActivity,
+      (active) => {
+        if (!active) batch.flush()
+      },
+      { flush: 'sync' }
+    )
+  }
   const instances = useSceneComputed(() => {
     void editor.state.sceneVersion
     return editor.getSelectedNodes().filter((node) => node.type === 'INSTANCE')
@@ -70,12 +86,23 @@ export function useComponentProperties() {
     })
   })
 
-  function setValue(propertyId: string, value: string) {
+  function applyValue(propertyId: string, value: string, liveText: boolean) {
     if (!active.value) return
     const targets = [...instances.value]
     const definition = definitions.value.find((item) => item.id === propertyId)
     if (!definition) return
     const label = `Change ${definition.name}`
+    if (liveText && definition.type === 'TEXT') {
+      if (
+        targets.every(
+          (instance) => editor.getInstanceComponentPropertyValue(instance.id, definition) === value
+        )
+      )
+        return
+      batch.ensure(`${propertyId}:${targets.map((node) => node.id).join(',')}`, label)
+    } else {
+      batch.flush()
+    }
     const run = () => {
       for (const instance of targets) {
         editor.setInstanceComponentProperty(instance.id, propertyId, value)
@@ -85,5 +112,14 @@ export function useComponentProperties() {
     else run()
   }
 
-  return { active, controls, setValue }
+  function setValue(propertyId: string, value: string) {
+    applyValue(propertyId, value, false)
+  }
+
+  /** Apply typing immediately, grouping rapid changes until blur, Enter, or idle. */
+  function setTextValue(propertyId: string, value: string) {
+    applyValue(propertyId, value, true)
+  }
+
+  return { active, controls, setValue, setTextValue, flush: batch.flush }
 }
