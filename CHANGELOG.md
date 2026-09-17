@@ -2,8 +2,14 @@
 
 ## Unreleased
 
+### Changed
+
+- Export diagnostics from Settings only. AI requests and tool activity now carry conversation and request identifiers, while chat no longer offers a separate diagnostic log or includes transcript content.
+
 ### Fixed
 
+- Mark unsaved documents and ask whether to save before closing a tab, the desktop window, or the application, rather than relying on recovery alone.
+- Defer AI provider connections and system credential reads until you send a message or use a connected feature, so opening documents and browsing chat history no longer trigger unexpected credential prompts.
 - Save and recover documents whose text uses disabled numeric, fraction, or small-caps OpenType features, which previously failed to write a `.fig` file.
 - Update instance text properties on the canvas while typing, with grouped undo for rapid edits.
 - Keep Display-P3 documents in wide gamut where the browser can present them, and show a dismissible notice with sRGB previews elsewhere, fixing the black rectangles and incorrect blend colors without changing document color settings.
