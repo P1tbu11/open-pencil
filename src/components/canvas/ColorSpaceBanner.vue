@@ -4,7 +4,11 @@ import { computed } from 'vue'
 import { useI18n } from '@open-pencil/vue'
 
 import { activeTab } from '@/app/tabs'
+import ExternalLink from '@/components/links/ExternalLink.vue'
 import AppBanner from '@/components/ui/feedback/AppBanner.vue'
+
+/** Neutral capability reference: the floating-point drawing buffer support table. */
+const supportURL = 'https://caniuse.com/mdn-api_webglrenderingcontext_drawingbufferstorage'
 
 const { rendering, common } = useI18n()
 
@@ -24,6 +28,7 @@ const message = computed(() => rendering.value.wideGamutUnavailable)
 <template>
   <AppBanner v-if="show" test-id="wide-gamut-banner" storage-key="wide-gamut-banner-dismissed">
     {{ message }}
+    <ExternalLink :href="supportURL" class="ml-1">{{ common.browserSupport }}</ExternalLink>
     <template #dismiss>{{ common.dismiss }}</template>
   </AppBanner>
 </template>
