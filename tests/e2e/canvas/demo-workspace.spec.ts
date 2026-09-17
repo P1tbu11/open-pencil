@@ -14,7 +14,7 @@ async function openDemo(page: Page) {
 test.use({ viewport: { width: 1200, height: 1300 } })
 
 for (const [name, snapshot] of [
-  ['01 · Components & variables', 'demo-announcements'],
+  ['01 · Components & variables', 'demo-components-and-variables'],
   ['02 · Typography', 'demo-typography'],
   ['03 · Paint & effects', 'demo-paint']
 ] as const) {
@@ -47,6 +47,19 @@ for (const [name, snapshot] of [
     })
   })
 }
+
+test('demo generation reports canvas preparation until the document is ready', async ({ page }) => {
+  const canvas = new CanvasHelper(page)
+  await page.goto('/demo?no-chrome&no-rulers')
+  const loader = page.getByTestId('canvas-loading')
+  await expect(loader).toBeVisible()
+  await expect(loader).toContainText(
+    /Preparing layers|Resolving fonts|Computing layout|Preparing canvas/
+  )
+  await canvas.waitForInit()
+  await waitForDemo(page)
+  await expect(loader).toBeHidden()
+})
 
 test('demo completion preserves a document replaced during its final page switch', async ({
   page

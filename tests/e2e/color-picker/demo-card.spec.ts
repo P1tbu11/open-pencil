@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 
 import { CanvasHelper } from '#tests/helpers/canvas'
-import { selectDemoReferencePage } from '#tests/helpers/demo'
+import { waitForDemo } from '#tests/helpers/demo'
 
 async function dragSlider(
   page: Parameters<typeof test>[0]['page'],
@@ -25,7 +25,7 @@ async function dragSlider(
 async function selectDemoCard(page: Parameters<typeof test>[0]['page'], canvas: CanvasHelper) {
   await page.goto('/demo')
   await canvas.waitForInit()
-  await selectDemoReferencePage(page)
+  await waitForDemo(page)
 
   await page.evaluate(() => {
     const store = window.openPencil?.getStore?.()

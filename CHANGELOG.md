@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Changed
+
+- Replace the demo's legacy reference page with a component library on the first page, including component sets, linked instances, component properties, and the variable collections.
+
+### Fixed
+
+- Show the standard canvas loading overlay and tab indicator while the demo document is generated, instead of an empty canvas.
+
 ## 0.15.0 — 2026-09-16
 
 ### Breaking changes
