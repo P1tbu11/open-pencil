@@ -26,6 +26,13 @@ brew install --cask openpencil
 
 Polecenie instaluje podpisaną aplikację dla komputerów Mac z Apple Silicon lub procesorem Intel z [oficjalnego katalogu Homebrew](https://formulae.brew.sh/cask/openpencil). Aktualizacje są weryfikowane przez Homebrew i mogą pojawiać się później niż wydania na GitHubie. W tym czasie skorzystaj z [bezpośredniego pobierania](https://github.com/open-pencil/open-pencil/releases/latest). CLI instaluje się osobno: `npm install -g @open-pencil/cli`.
 
+Jeśli używałeś zarchiwizowanego własnego tapa, przeprowadź migrację:
+
+```sh
+brew uninstall open-pencil/tap/open-pencil
+brew install --cask openpencil
+```
+
 ## Budowanie ze źródeł
 
 ### Wymagania

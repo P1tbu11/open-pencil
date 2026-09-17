@@ -26,6 +26,13 @@ brew install --cask openpencil
 
 Команда устанавливает подписанное приложение для Mac с Apple Silicon или Intel из [официального каталога Homebrew](https://formulae.brew.sh/cask/openpencil). Обновления проходят проверку в Homebrew и могут появляться позже релизов на GitHub. До обновления каталога используйте [прямую загрузку](https://github.com/open-pencil/open-pencil/releases/latest). CLI устанавливается отдельно: `npm install -g @open-pencil/cli`.
 
+Если вы использовали архивный собственный tap, перейдите так:
+
+```sh
+brew uninstall open-pencil/tap/open-pencil
+brew install --cask openpencil
+```
+
 ## Сборка из исходного кода
 
 ### Что потребуется
