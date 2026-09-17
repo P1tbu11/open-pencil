@@ -34,10 +34,14 @@ export function isHardwareRenderer(renderer: string | null | undefined): boolean
 }
 
 function hasFloatDrawingBuffer(context: ColorManagedContext): boolean {
-  const { drawingBufferStorage, RGBA16F: floatFormat, getExtension } = context
-  if (typeof drawingBufferStorage !== 'function' || floatFormat === undefined) return false
-  if (!getExtension) return false
-  return getExtension('EXT_color_buffer_float') != null && getExtension('EXT_float_blend') != null
+  if (typeof context.drawingBufferStorage !== 'function') return false
+  if (context.RGBA16F === undefined) return false
+  // WebGL methods require their context as `this`, so never call them unbound.
+  if (!context.getExtension) return false
+  return (
+    context.getExtension('EXT_color_buffer_float') != null &&
+    context.getExtension('EXT_float_blend') != null
+  )
 }
 
 /** Read the buffer back instead of trusting a write TS narrowed to the requested value. */

@@ -69,6 +69,7 @@ export function createCanvasSurfaceManager({
     )
     state.glContext = result.glContext
     state.presentation = result.presentation
+    options?.onPresentation?.(result.presentation)
     const surface = result.surface
     if (!surface) {
       canvas.dataset.surfaceError = 'webgl'
@@ -149,6 +150,7 @@ export function createCanvasSurfaceManager({
     )
     state.glContext = result.glContext
     state.presentation = result.presentation
+    options?.onPresentation?.(result.presentation)
     const surface = result.surface
     if (!surface) {
       console.warn('Falling back to full surface recreation after resize')

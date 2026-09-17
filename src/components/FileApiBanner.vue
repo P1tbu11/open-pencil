@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { useI18n } from '@open-pencil/vue'
 
+import { supportsFileSystemAccess } from '@/app/document/io/capability'
 import AppBanner from '@/components/ui/feedback/AppBanner.vue'
-import { IS_BROWSER, IS_TAURI } from '@/constants'
+import { IS_TAURI } from '@/constants'
 
 const { files, common } = useI18n()
-const show = !IS_TAURI && IS_BROWSER && !window.showSaveFilePicker
+const show = !IS_TAURI && !supportsFileSystemAccess()
 </script>
 
 <template>

@@ -84,9 +84,8 @@ export function createSaveActions({
       return
     }
 
-    if (window.showSaveFilePicker) {
-      const handle = await chooseBrowserFigSaveHandle()
-      if (!handle) return
+    const handle = await chooseBrowserFigSaveHandle()
+    if (handle) {
       setStorageBinding(null)
       setFileHandle(handle)
       setFilePath(null)

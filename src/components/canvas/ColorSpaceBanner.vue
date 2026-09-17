@@ -1,25 +1,22 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed } from 'vue'
 
-import { useI18n, useEditorEvent, supportsWideGamutPresentation } from '@open-pencil/vue'
+import { useI18n } from '@open-pencil/vue'
 
 import { activeTab } from '@/app/tabs'
 import AppBanner from '@/components/ui/feedback/AppBanner.vue'
 
 const { rendering, common } = useI18n()
 
-// Display-P3 documents present wide gamut only where the browser and display support it.
-const show = ref(false)
-
-function refresh() {
-  const store = activeTab.value?.store
-  show.value =
-    !!store && store.graph.documentColorSpace === 'display-p3' && !supportsWideGamutPresentation()
-}
-
-watch(activeTab, refresh, { immediate: true })
-useEditorEvent('document:color-space-changed', refresh)
-useEditorEvent('graph:replaced', refresh)
+// The surface reports what it actually presents, so this notice appears only when a
+// Display-P3 document really is being shown in sRGB.
+const show = computed(() => {
+  const state = activeTab.value?.store.state
+  // Both fields are read unconditionally so the computed keeps depending on each of them.
+  const presentation = state?.canvasPresentation
+  const documentColorSpace = state?.documentColorSpace
+  return presentation === 'srgb' && documentColorSpace === 'display-p3'
+})
 
 const message = computed(() => rendering.value.wideGamutUnavailable)
 </script>

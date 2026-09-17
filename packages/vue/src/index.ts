@@ -19,6 +19,7 @@ export { provideEditor, useEditor, EDITOR_KEY } from '#vue/editor/context'
 
 /** Canvas and input integration composables. */
 export { supportsWideGamutPresentation } from '#vue/canvas/surface/color-space'
+export type { PresentationColorSpace } from '#vue/canvas/surface/color-space'
 export { useCanvas } from '#vue/canvas/surface/use'
 export type { UseCanvasOptions } from '#vue/canvas/surface/use'
 export { useCanvasInput } from '#vue/canvas/useCanvasInput'
