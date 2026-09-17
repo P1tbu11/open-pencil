@@ -1,11 +1,12 @@
 import { computed, watch } from 'vue'
 
-import type { SceneNode } from '@open-pencil/scene-graph'
+import type { ComponentPropertyDefinition, SceneNode } from '@open-pencil/scene-graph'
 
 import {
   compatibleComponentPropertyDefinitions,
   instanceSwapOptions,
   mergedComponentPropertyValue,
+  variantOptions,
   type ComponentPropertyControl,
   type ComponentPropertyOption
 } from '#vue/controls/component-props/model'
@@ -15,19 +16,23 @@ import { useEditor } from '#vue/editor/context'
 import { useSceneComputed } from '#vue/internal/scene-computed/use'
 import { useRetainedActivity } from '#vue/lifecycle/retention/context'
 
-function variantOptions(editor: ReturnType<typeof useEditor>, instance: SceneNode, name: string) {
-  return editor.getVariantOptionAvailability(instance.id, name).map(({ value, available }) => ({
-    value,
-    label: value,
-    disabled: !available
-  }))
+interface ResolvedEdit {
+  definition: ComponentPropertyDefinition
+  targets: SceneNode[]
+  label: string
+}
+
+/** One batch per property and target set, so a new selection starts a new entry. */
+function batchKey(propertyId: string, targets: SceneNode[]): string {
+  return [propertyId, ...targets.map((node) => node.id)].join(':')
 }
 
 export function useComponentProperties() {
   const editor = useEditor()
   const batch = useUndoBatch(editor.undo, editor.beginInteractiveEdit)
   const retainedActivity = useRetainedActivity()
-  watch(() => [editor.state.currentPageId, ...editor.state.selectedIds], batch.flush, {
+  // A batch never spans a page change, a new selection, or a paused retained scope.
+  watch([() => editor.state.currentPageId, () => editor.state.selectedIds], batch.flush, {
     flush: 'sync'
   })
   if (retainedActivity) {
@@ -39,28 +44,23 @@ export function useComponentProperties() {
       { flush: 'sync' }
     )
   }
-  const instances = useSceneComputed(() => {
-    void editor.state.sceneVersion
-    return editor.getSelectedNodes().filter((node) => node.type === 'INSTANCE')
-  })
-  const selectedCount = computed(() => editor.state.selectedIds.size)
-  const definitionSets = useSceneComputed(() => {
-    void editor.state.sceneVersion
-    return instances.value.map((instance) =>
-      editor.getInstanceComponentPropertyDefinitions(instance.id)
-    )
-  })
-  const definitions = computed(() => compatibleComponentPropertyDefinitions(definitionSets.value))
-  const active = computed(
-    () =>
-      instances.value.length > 0 &&
-      instances.value.length === selectedCount.value &&
-      definitions.value.length > 0
+  const instances = useSceneComputed(() =>
+    editor.getSelectedNodes().filter((node) => node.type === 'INSTANCE')
   )
+  const selectedCount = computed(() => editor.state.selectedIds.size)
+  const allSelectedAreInstances = computed(
+    () => instances.value.length > 0 && instances.value.length === selectedCount.value
+  )
+  const definitionSets = useSceneComputed(() =>
+    instances.value.map((instance) => editor.getInstanceComponentPropertyDefinitions(instance.id))
+  )
+  const definitions = computed(() => compatibleComponentPropertyDefinitions(definitionSets.value))
+  const active = computed(() => allSelectedAreInstances.value && definitions.value.length > 0)
   const controls = useSceneComputed<ComponentPropertyControl[]>(() => {
-    void editor.state.sceneVersion
     if (!active.value || instances.value.length === 0) return []
     const firstInstance = instances.value[0]
+    // Swap options scan the graph, so resolve that list once for every swap control.
+    let componentNodes: SceneNode[] | null = null
     return definitions.value.map((definition) => {
       const values = instances.value.map((instance) =>
         editor.getInstanceComponentPropertyValue(instance.id, definition)
@@ -70,11 +70,8 @@ export function useComponentProperties() {
       if (definition.type === 'VARIANT') {
         options = variantOptions(editor, firstInstance, definition.name)
       } else if (definition.type === 'INSTANCE_SWAP') {
-        options = instanceSwapOptions(
-          [...editor.graph.getAllNodes()],
-          definition,
-          value === MIXED ? '' : value
-        )
+        componentNodes ??= [...editor.graph.getAllNodes()]
+        options = instanceSwapOptions(componentNodes, definition, value === MIXED ? '' : value)
       }
       return {
         id: definition.id,
@@ -86,39 +83,50 @@ export function useComponentProperties() {
     })
   })
 
-  function applyValue(propertyId: string, value: string, liveText: boolean) {
-    if (!active.value) return
-    const targets = [...instances.value]
+  function resolveEdit(propertyId: string): ResolvedEdit | null {
+    if (!active.value) return null
     const definition = definitions.value.find((item) => item.id === propertyId)
-    if (!definition) return
-    const label = `Change ${definition.name}`
-    if (liveText && definition.type === 'TEXT') {
-      if (
-        targets.every(
-          (instance) => editor.getInstanceComponentPropertyValue(instance.id, definition) === value
-        )
-      )
-        return
-      batch.ensure(`${propertyId}:${targets.map((node) => node.id).join(',')}`, label)
-    } else {
-      batch.flush()
-    }
-    const run = () => {
-      for (const instance of targets) {
+    if (!definition) return null
+    return { definition, targets: [...instances.value], label: `Change ${definition.name}` }
+  }
+
+  function commitToInstances(edit: ResolvedEdit, propertyId: string, value: string) {
+    const apply = () => {
+      for (const instance of edit.targets) {
         editor.setInstanceComponentProperty(instance.id, propertyId, value)
       }
     }
-    if (targets.length > 1) editor.undo.runBatch(label, run)
-    else run()
+    if (edit.targets.length > 1) editor.undo.runBatch(edit.label, apply)
+    else apply()
+  }
+
+  function applyDiscrete(edit: ResolvedEdit, propertyId: string, value: string) {
+    batch.flush()
+    commitToInstances(edit, propertyId, value)
+  }
+
+  function hasValueEverywhere(edit: ResolvedEdit, value: string): boolean {
+    return edit.targets.every(
+      (instance) => editor.getInstanceComponentPropertyValue(instance.id, edit.definition) === value
+    )
   }
 
   function setValue(propertyId: string, value: string) {
-    applyValue(propertyId, value, false)
+    const edit = resolveEdit(propertyId)
+    if (edit) applyDiscrete(edit, propertyId, value)
   }
 
   /** Apply typing immediately, grouping rapid changes until blur, Enter, or idle. */
   function setTextValue(propertyId: string, value: string) {
-    applyValue(propertyId, value, true)
+    const edit = resolveEdit(propertyId)
+    if (!edit) return
+    if (edit.definition.type !== 'TEXT') {
+      applyDiscrete(edit, propertyId, value)
+      return
+    }
+    if (hasValueEverywhere(edit, value)) return
+    batch.ensure(batchKey(propertyId, edit.targets), edit.label)
+    commitToInstances(edit, propertyId, value)
   }
 
   return { active, controls, setValue, setTextValue, flush: batch.flush }
