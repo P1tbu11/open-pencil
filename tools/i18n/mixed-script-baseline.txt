@@ -103,6 +103,7 @@ ja:recovery.dialogDescription
 ja:rendering.reloadRequired
 ja:rendering.settingsDescription
 ja:rendering.urlOverride
+ja:rendering.wideGamutUnavailable
 ja:settings.invalidURL
 ja:settings.modelIDHint
 ja:settings.baseURLHint
@@ -221,6 +222,7 @@ zh-cn:recovery.dialogDescription
 zh-cn:rendering.reloadRequired
 zh-cn:rendering.settingsDescription
 zh-cn:rendering.urlOverride
+zh-cn:rendering.wideGamutUnavailable
 zh-cn:settings.invalidURL
 zh-cn:settings.baseURLHint
 zh-cn:settings.aiAndAgents

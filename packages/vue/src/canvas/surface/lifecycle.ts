@@ -5,6 +5,10 @@ import type { Ref } from 'vue'
 import { SkiaRenderer } from '@open-pencil/core/canvas'
 import type { Editor } from '@open-pencil/core/editor'
 
+import {
+  supportsWideGamutPresentation,
+  type PresentationColorSpace
+} from '#vue/canvas/surface/color-space'
 import { makeGLSurface, sizeCanvas, type CanvasGLContext } from '#vue/canvas/surface/gl-surface'
 import { useCanvasKitLoader } from '#vue/canvas/surface/kit-loader'
 import { createCanvasRenderLoop } from '#vue/canvas/surface/render-loop'
@@ -14,6 +18,7 @@ import type { UseCanvasOptions } from '#vue/canvas/surface/types'
 type SurfaceManagerState = {
   renderer: SkiaRenderer | null
   glContext: CanvasGLContext | null
+  presentation: PresentationColorSpace | null
 }
 
 export function createCanvasSurfaceManager({
@@ -31,7 +36,7 @@ export function createCanvasSurfaceManager({
   isDestroyed: () => boolean
   shouldShowRulers: () => boolean
 }) {
-  const state: SurfaceManagerState = { renderer: null, glContext: null }
+  const state: SurfaceManagerState = { renderer: null, glContext: null, presentation: null }
   let sceneBackingRenderTimer: ReturnType<typeof setTimeout> | null = null
 
   function clearSceneBackingRenderTimer() {
@@ -55,8 +60,15 @@ export function createCanvasSurfaceManager({
 
     sizeCanvas(canvas, editor, options?.onViewportResize)
 
-    const result = makeGLSurface(ck, canvas, options, state.glContext)
+    const result = makeGLSurface(
+      ck,
+      canvas,
+      options,
+      state.glContext,
+      editor.graph.documentColorSpace
+    )
     state.glContext = result.glContext
+    state.presentation = result.presentation
     const surface = result.surface
     if (!surface) {
       canvas.dataset.surfaceError = 'webgl'
@@ -128,8 +140,15 @@ export function createCanvasSurfaceManager({
 
     sizeCanvas(canvas, editor, options?.onViewportResize)
 
-    const result = makeGLSurface(ck, canvas, options, state.glContext)
+    const result = makeGLSurface(
+      ck,
+      canvas,
+      options,
+      state.glContext,
+      editor.graph.documentColorSpace
+    )
     state.glContext = result.glContext
+    state.presentation = result.presentation
     const surface = result.surface
     if (!surface) {
       console.warn('Falling back to full surface recreation after resize')
@@ -140,7 +159,27 @@ export function createCanvasSurfaceManager({
     renderNow()
   }
 
+  const wantsWideGamut = () =>
+    editor.graph.documentColorSpace === 'display-p3' && supportsWideGamutPresentation()
+
+  /** A P3 document needs the P3 surface, and vice versa; documents arrive after mount. */
+  function refreshPresentation() {
+    if (isDestroyed()) return
+    const canvas = canvasRef.value
+    if (!canvas) return
+    if (wantsWideGamut() === (state.presentation === 'display-p3')) return
+    createSurface(canvas, { reloadFonts: true })
+  }
+
+  const stopPresentationRefresh = editor.onEditorEvent('graph:replaced', refreshPresentation)
+  const stopColorSpaceRefresh = editor.onEditorEvent(
+    'document:color-space-changed',
+    refreshPresentation
+  )
+
   function destroy() {
+    stopPresentationRefresh()
+    stopColorSpaceRefresh()
     clearSceneBackingRenderTimer()
     renderLoop.pause()
     if (state.renderer) editor.removeCanvasRenderer(state.renderer)
@@ -154,7 +193,8 @@ export function createCanvasSurfaceManager({
     renderNow,
     destroy,
     markDirty: () => renderLoop.markDirty(),
-    getRenderer: () => state.renderer
+    getRenderer: () => state.renderer,
+    getPresentation: () => state.presentation
   }
 }
 

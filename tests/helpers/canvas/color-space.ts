@@ -12,6 +12,13 @@ export async function emulateWideGamutDisplay(page: Page) {
   })
 }
 
+/** Keep the wide-gamut notice from resizing the canvas in rendering-fidelity tests. */
+export async function dismissWideGamutBanner(page: Page) {
+  const banner = page.getByTestId('wide-gamut-banner')
+  await banner.waitFor({ state: 'visible', timeout: 5_000 }).catch(() => undefined)
+  if (await banner.isVisible()) await page.getByTestId('wide-gamut-banner-dismiss').click()
+}
+
 export async function focusReferenceEffects(page: Page) {
   await page.evaluate(() => {
     const store = window.openPencil?.getStore?.()
