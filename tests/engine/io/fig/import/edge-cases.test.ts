@@ -3,7 +3,7 @@ import { describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { importNodeChanges, parseFigFile } from '@open-pencil/core'
 
 import { expectDefined } from '#tests/helpers/assert'
-import { parseFixture, sharedGoldPreviewFixture } from '#tests/helpers/fig-fixtures'
+import { sharedGoldPreviewFixture } from '#tests/helpers/fig-fixtures'
 
 setDefaultTimeout(60_000)
 
