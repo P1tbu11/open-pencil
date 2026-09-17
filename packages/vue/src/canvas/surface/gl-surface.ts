@@ -31,7 +31,6 @@ export function sizeCanvas(
 export function makeGLSurface(
   ck: CanvasKit,
   canvas: HTMLCanvasElement,
-  editor: Editor,
   options: UseCanvasOptions | undefined,
   glContext: GLContext | null
 ): { surface: Surface | null; glContext: GLContext | null } {
@@ -41,27 +40,15 @@ export function makeGLSurface(
   if (!context && !handle) return { surface: null, glContext: context }
 
   const buffer = canvas.getContext('webgl2') ?? canvas.getContext('webgl')
-  const wideGamut = IS_BROWSER && window.matchMedia('(color-gamut: p3)').matches
-  const actualSpace = configureDrawingBufferColorSpace(
-    buffer,
-    editor.graph.documentColorSpace,
-    wideGamut
-  )
+  if (!configureDrawingBufferColorSpace(buffer)) {
+    if (handle) ck.deleteContext(handle)
+    return { surface: null, glContext: context }
+  }
   if (!context && handle) context = ck.MakeGrContext(handle)
   if (!context) return { surface: null, glContext: context }
 
-  const colorSpace = actualSpace === 'display-p3' ? ck.ColorSpace.DISPLAY_P3 : ck.ColorSpace.SRGB
-  const surface = ck.MakeOnScreenGLSurface(context, canvas.width, canvas.height, colorSpace)
-  if (surface) return { surface, glContext: context }
-
-  if (
-    actualSpace === 'display-p3' &&
-    configureDrawingBufferColorSpace(buffer, 'srgb', false) === 'srgb'
-  ) {
-    return {
-      surface: ck.MakeOnScreenGLSurface(context, canvas.width, canvas.height, ck.ColorSpace.SRGB),
-      glContext: context
-    }
+  return {
+    surface: ck.MakeOnScreenGLSurface(context, canvas.width, canvas.height, ck.ColorSpace.SRGB),
+    glContext: context
   }
-  return { surface: null, glContext: context }
 }

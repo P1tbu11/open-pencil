@@ -2,34 +2,43 @@ import { expect, test } from 'bun:test'
 
 import { configureDrawingBufferColorSpace } from '#vue/canvas/surface/color-space'
 
-for (const wideGamut of [false, true]) {
-  for (const documentSpace of ['srgb', 'display-p3'] as const) {
-    test(`buffer space matches ${documentSpace}, wide gamut ${wideGamut}`, () => {
-      const context: Pick<WebGLRenderingContext, 'drawingBufferColorSpace'> = {
-        drawingBufferColorSpace: 'srgb'
-      }
-      const expected = wideGamut && documentSpace === 'display-p3' ? 'display-p3' : 'srgb'
-      expect(configureDrawingBufferColorSpace(context, documentSpace, wideGamut)).toBe(expected)
-      expect(context.drawingBufferColorSpace).toBe(expected)
-    })
-  }
-}
+test('sRGB buffers already match CanvasKit RGBA8 surfaces', () => {
+  const context = { drawingBufferColorSpace: 'srgb' as PredefinedColorSpace }
+  expect(configureDrawingBufferColorSpace(context)).toBe(true)
+  expect(context.drawingBufferColorSpace).toBe('srgb')
+})
 
-test('unsupported and read-only contexts retain their actual sRGB buffer', () => {
-  expect(configureDrawingBufferColorSpace(null, 'display-p3', true)).toBe('srgb')
-  expect(configureDrawingBufferColorSpace({}, 'display-p3', true)).toBe('srgb')
+test('a retained P3 context returns to sRGB without changing storage', () => {
+  const context = { drawingBufferColorSpace: 'display-p3' as PredefinedColorSpace }
+  expect(configureDrawingBufferColorSpace(context)).toBe(true)
+  expect(context.drawingBufferColorSpace).toBe('srgb')
+})
+
+test('browsers without color-space control use their default sRGB buffer', () => {
+  expect(configureDrawingBufferColorSpace(null)).toBe(true)
+  expect(configureDrawingBufferColorSpace({})).toBe(true)
   const readOnly = {
     get drawingBufferColorSpace(): PredefinedColorSpace {
       return 'srgb'
     }
   }
-  expect(configureDrawingBufferColorSpace(readOnly, 'display-p3', true)).toBe('srgb')
+  expect(configureDrawingBufferColorSpace(readOnly)).toBe(true)
 })
 
-test('switching away from P3 resets a retained context to sRGB', () => {
-  const context: Pick<WebGLRenderingContext, 'drawingBufferColorSpace'> = {
-    drawingBufferColorSpace: 'display-p3'
+test('an incompatible buffer that rejects sRGB cannot be wrapped', () => {
+  const throwing = {
+    get drawingBufferColorSpace(): PredefinedColorSpace {
+      return 'display-p3'
+    }
   }
-  expect(configureDrawingBufferColorSpace(context, 'srgb', true)).toBe('srgb')
-  expect(context.drawingBufferColorSpace).toBe('srgb')
+  expect(configureDrawingBufferColorSpace(throwing)).toBe(false)
+  const ignored = {
+    get drawingBufferColorSpace(): PredefinedColorSpace {
+      return 'display-p3'
+    },
+    set drawingBufferColorSpace(_value: PredefinedColorSpace) {
+      // Model browsers that silently ignore an unsupported color-space request.
+    }
+  }
+  expect(configureDrawingBufferColorSpace(ignored)).toBe(false)
 })

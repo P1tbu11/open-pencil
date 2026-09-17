@@ -55,7 +55,7 @@ export function createCanvasSurfaceManager({
 
     sizeCanvas(canvas, editor, options?.onViewportResize)
 
-    const result = makeGLSurface(ck, canvas, editor, options, state.glContext)
+    const result = makeGLSurface(ck, canvas, options, state.glContext)
     state.glContext = result.glContext
     const surface = result.surface
     if (!surface) {
@@ -128,7 +128,7 @@ export function createCanvasSurfaceManager({
 
     sizeCanvas(canvas, editor, options?.onViewportResize)
 
-    const result = makeGLSurface(ck, canvas, editor, options, state.glContext)
+    const result = makeGLSurface(ck, canvas, options, state.glContext)
     state.glContext = result.glContext
     const surface = result.surface
     if (!surface) {

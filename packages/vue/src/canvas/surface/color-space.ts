@@ -1,20 +1,20 @@
-import type { DocumentColorSpace } from '@open-pencil/scene-graph'
-
 type ColorManagedContext = Partial<Pick<WebGLRenderingContext, 'drawingBufferColorSpace'>>
 
-/** Keep Skia's surface encoding aligned with the browser's actual presentation buffer. */
-export function configureDrawingBufferColorSpace(
-  context: ColorManagedContext | null,
-  documentColorSpace: DocumentColorSpace,
-  wideGamut: boolean
-): DocumentColorSpace {
-  if (!context?.drawingBufferColorSpace) return 'srgb'
-  const requested = wideGamut && documentColorSpace === 'display-p3' ? 'display-p3' : 'srgb'
-  if (context.drawingBufferColorSpace === requested) return requested
+/**
+ * CanvasKit 0.41 wraps sRGB on-screen surfaces as RGBA8, but all other color spaces
+ * as RGBA16F. Browser drawing buffers remain RGBA8 when their color space changes,
+ * so using DISPLAY_P3 causes invalid destination copies and broken blend modes.
+ * Keep presentation in sRGB until CanvasKit can wrap an RGBA8 P3 framebuffer.
+ * This does not change the document's color space or its stored colors.
+ */
+export function configureDrawingBufferColorSpace(context: ColorManagedContext | null): boolean {
+  if (!context?.drawingBufferColorSpace) return true
   try {
-    context.drawingBufferColorSpace = requested
-  } catch (error) {
-    console.warn('Canvas color-space request is unavailable; keeping the current buffer.', error)
+    if (context.drawingBufferColorSpace !== 'srgb') context.drawingBufferColorSpace = 'srgb'
+  } catch {
+    return false
   }
-  return context.drawingBufferColorSpace === 'display-p3' ? 'display-p3' : 'srgb'
+  // A browser may silently ignore the setter; read back rather than trusting TS narrowing.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+  return context.drawingBufferColorSpace === 'srgb'
 }
