@@ -101,8 +101,16 @@ export async function createDemoShapes(store: EditorStore) {
     await store.preparationController.waitForPresentation(load.id, store.state.sceneVersion)
     succeeded = true
   } catch (error) {
-    if (!load.signal.aborted) console.warn('[Demo] Failed to prepare the demo document:', error)
+    if (!load.signal.aborted) {
+      load.fail({
+        code: 'layout-failed',
+        message: error instanceof Error ? error.message : String(error),
+        retryable: true
+      })
+      console.warn('[Demo] Failed to prepare the demo document:', error)
+    }
   } finally {
+    // A failed or superseded handle has already cleared itself, so this is a no-op then.
     if (succeeded) load.complete()
     else load.cancel('superseded')
   }
