@@ -7,6 +7,10 @@
 - Update instance text properties on the canvas while typing, with grouped undo for rapid edits.
 - Prevent black rectangles and incorrect blend colors in Display-P3 documents by using sRGB canvas previews; document color settings remain unchanged.
 
+### Performance
+
+- Reduce editor pauses while generating recovery snapshots and exporting text-heavy `.fig` documents.
+
 ## 0.15.0 — 2026-09-16
 
 ### Breaking changes
