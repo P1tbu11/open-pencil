@@ -88,7 +88,7 @@ test('stroke picker hsb saturation and brightness sliders update stroke color on
   await canvas.waitForInit()
   await waitForDemo(page)
 
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
     const store = window.openPencil?.getStore?.()
     if (!store) throw new Error('OpenPencil store not initialized')
     const nodes = Array.from(store.graph.nodes.values())
@@ -96,6 +96,11 @@ test('stroke picker hsb saturation and brightness sliders update stroke color on
       nodes.find((node) => node.name === 'Card' && node.type === 'COMPONENT') ??
       nodes.find((node) => node.name === 'Card')
     if (!card) throw new Error('Card not found')
+    let owner = card
+    while (owner && owner.type !== 'CANVAS') {
+      owner = owner.parentId ? store.graph.getNode(owner.parentId) : undefined
+    }
+    if (owner && owner.id !== store.state.currentPageId) await store.switchPage(owner.id)
     const stroke = {
       color: { r: 0.9, g: 0.9, b: 0.92, a: 1 },
       weight: 1,
