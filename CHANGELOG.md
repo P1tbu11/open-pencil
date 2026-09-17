@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Save and recover documents whose text uses disabled numeric, fraction, or small-caps OpenType features, which previously failed to write a `.fig` file.
 - Update instance text properties on the canvas while typing, with grouped undo for rapid edits.
 - Keep Display-P3 documents in wide gamut where the browser can present them, and show a dismissible notice with sRGB previews elsewhere, fixing the black rectangles and incorrect blend colors without changing document color settings.
 
