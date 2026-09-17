@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Create new documents with the sRGB colour profile, so Display P3 is reserved for documents that declare it.
 - Export diagnostics from Settings only. AI requests and tool activity now carry conversation and request identifiers, while chat no longer offers a separate diagnostic log or includes transcript content.
 
 ### Fixed
@@ -12,7 +13,8 @@
 - Defer AI provider connections and system credential reads until you send a message or use a connected feature, so opening documents and browsing chat history no longer trigger unexpected credential prompts.
 - Save and recover documents whose text uses disabled numeric, fraction, or small-caps OpenType features, which previously failed to write a `.fig` file.
 - Update instance text properties on the canvas while typing, with grouped undo for rapid edits.
-- Keep Display-P3 documents in wide gamut where the browser can present them, and show a dismissible notice with sRGB previews elsewhere, fixing the black rectangles and incorrect blend colors without changing document color settings.
+- Keep Display-P3 documents rendering correctly in wide gamut where the browser supports it and in sRGB elsewhere, fixing the black rectangles and incorrect blend colors, with a dismissible notice when wide gamut is unavailable.
+- Convert colours between a document's colour profile and the display's, so a Display-P3 document no longer looks different on an sRGB display than on a wide-gamut one.
 - Point Homebrew installation instructions to the official `openpencil` cask and document separate CLI installation.
 
 ### Performance

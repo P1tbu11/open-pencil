@@ -78,6 +78,7 @@ export function createCanvasSurfaceManager({
 
     const glCtx = canvas.getContext('webgl2') ?? null
     state.renderer = new SkiaRenderer(ck, surface, glCtx)
+    state.renderer.presentationColorSpace = result.presentation ?? 'srgb'
     state.renderer.tracksSceneSettlement = options?.layer !== 'overlays'
     state.renderer.tiledSceneEnabled = options?.sceneRenderer === 'tiled'
     editor.setCanvasKit(ck, state.renderer)
@@ -157,6 +158,7 @@ export function createCanvasSurfaceManager({
       createSurface(canvas, { reloadFonts: true })
       return
     }
+    state.renderer.presentationColorSpace = result.presentation ?? 'srgb'
     state.renderer.replaceSurface(surface)
     renderNow()
   }

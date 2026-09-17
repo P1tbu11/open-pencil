@@ -17,9 +17,11 @@ test('P3 reference blends and masks survive pan, zoom, and surface resize', asyn
   await page.goto('/demo?no-chrome&no-rulers')
   const canvas = new CanvasHelper(page)
   await canvas.waitForInit()
-  await dismissWideGamutBanner(page)
   await selectDemoReferencePage(page)
   await focusReferenceEffects(page)
+  // The notice appears once the document is Display P3, and dismissing it keeps the canvas
+  // at a fixed offset for the snapshot.
+  await dismissWideGamutBanner(page)
   await waitForSettledScene(page)
 
   async function expectEffects() {
@@ -55,14 +57,17 @@ test('warns when a Display-P3 document cannot be presented in wide gamut', async
   const canvas = new CanvasHelper(page)
   await canvas.waitForInit()
 
-  // This project renders through SwiftShader or WebKit, so wide gamut is unavailable and
-  // the canvas falls back to an sRGB buffer for the Display-P3 document.
+  // New documents are sRGB, so this notice only applies once a document declares Display P3.
+  const banner = page.getByTestId('wide-gamut-banner')
+  await expect(banner).toBeHidden()
   expect(await sceneBufferState(page)).toMatchObject({
     colorSpace: 'srgb',
-    documentColorSpace: 'display-p3'
+    documentColorSpace: 'srgb'
   })
 
-  const banner = page.getByTestId('wide-gamut-banner')
+  // This project renders through SwiftShader or WebKit, so wide gamut is unavailable and an
+  // sRGB buffer is what a Display-P3 document gets.
+  await page.evaluate(() => window.openPencil?.getStore?.()?.setDocumentColorSpace('display-p3'))
   await expect(banner).toBeVisible()
   await expect(banner).toContainText('Display-P3')
 

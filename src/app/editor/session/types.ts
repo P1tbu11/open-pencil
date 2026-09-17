@@ -26,7 +26,7 @@ export function createInitialAppEditorState(pageId: string): AppEditorState {
     numberFieldFocused: false,
     preparation: null,
     canvasPresentation: null,
-    documentColorSpace: 'display-p3'
+    documentColorSpace: 'srgb'
   }
 }
 
