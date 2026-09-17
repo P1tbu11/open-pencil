@@ -19,16 +19,22 @@ export async function dismissWideGamutBanner(page: Page) {
   if (await banner.isVisible()) await page.getByTestId('wide-gamut-banner-dismiss').click()
 }
 
-export async function focusReferenceEffects(page: Page) {
+/** Focus the demo's paint and effects page, where blends and masks live. */
+export async function focusPaintEffects(page: Page) {
+  await page.evaluate(async () => {
+    const store = window.openPencil?.getStore?.()
+    if (!store) throw new Error('Editor unavailable')
+    const paintPage = store.graph.getPages().find((candidate) => candidate.name.startsWith('03'))
+    if (!paintPage) throw new Error('Demo paint page unavailable')
+    store.setDocumentColorSpace('display-p3')
+    if (store.state.currentPageId !== paintPage.id) await store.switchPage(paintPage.id)
+  })
   await page.evaluate(() => {
     const store = window.openPencil?.getStore?.()
     if (!store) throw new Error('Editor unavailable')
-    const effects = store.graph
-      .getChildren(store.state.currentPageId)
-      .find((n) => n.name === 'Effects')
-    if (!effects) throw new Error('Reference effects unavailable')
-    store.setDocumentColorSpace('display-p3')
-    store.select([effects.id])
+    const subject = store.graph.getChildren(store.state.currentPageId)[0]
+    if (!subject) throw new Error('Demo paint page is empty')
+    store.select([subject.id])
     store.zoomToSelection()
     store.clearSelection()
   })

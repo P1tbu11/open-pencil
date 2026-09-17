@@ -4,21 +4,19 @@ import { CanvasHelper } from '#tests/helpers/canvas'
 import {
   dismissWideGamutBanner,
   emulateWideGamutDisplay,
-  focusReferenceEffects,
+  focusPaintEffects,
   sceneBufferState,
   waitForSettledScene
 } from '#tests/helpers/canvas/color-space'
-import { selectDemoReferencePage } from '#tests/helpers/demo'
 
 test.use({ viewport: { width: 1200, height: 900 } })
 
-test('P3 reference blends and masks survive pan, zoom, and surface resize', async ({ page }) => {
+test('P3 paint blends and masks survive pan, zoom, and surface resize', async ({ page }) => {
   await emulateWideGamutDisplay(page)
   await page.goto('/demo?no-chrome&no-rulers')
   const canvas = new CanvasHelper(page)
   await canvas.waitForInit()
-  await selectDemoReferencePage(page)
-  await focusReferenceEffects(page)
+  await focusPaintEffects(page)
   // The notice appears once the document is Display P3, and dismissing it keeps the canvas
   // at a fixed offset for the snapshot.
   await dismissWideGamutBanner(page)
@@ -27,7 +25,7 @@ test('P3 reference blends and masks survive pan, zoom, and surface resize', asyn
   async function expectEffects() {
     const buffer = await sceneBufferState(page)
     expect(buffer).toEqual({ colorSpace: 'srgb', documentColorSpace: 'display-p3', error: 0 })
-    expect(await canvas.screenshotCanvas()).toMatchSnapshot('reference-effects.png')
+    expect(await canvas.screenshotCanvas()).toMatchSnapshot('paint-effects.png')
     canvas.assertNoErrors()
   }
   await expectEffects()
@@ -47,7 +45,7 @@ test('P3 reference blends and masks survive pan, zoom, and surface resize', asyn
   await waitForSettledScene(page)
   expect((await sceneBufferState(page)).error).toBe(0)
   await page.setViewportSize({ width: 1200, height: 900 })
-  await focusReferenceEffects(page)
+  await focusPaintEffects(page)
   await waitForSettledScene(page)
   await expectEffects()
 })
