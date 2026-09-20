@@ -164,7 +164,15 @@ function interpretRoot(
     return key ? [guid, key] : [guid]
   }
 
+  /** A layer written against a component that an outer decision replaced is stale, not wrong. */
+  const isStaleLayer = (layer: StructuralLayer): boolean =>
+    layer.boundary !== undefined &&
+    layer.boundary.replaced.some((component) =>
+      resolvesInSourceComponent(index, component, layer.boundary?.path ?? [])
+    )
+
   const unresolvedStructural = (layer: StructuralLayer, cause: SegmentError): void => {
+    if (cause.count === 0 && isStaleLayer(layer)) return
     const error = pathError(layer.owner.id, layer.owner.mainComponentId, layer.declaredPath, cause)
     if (layer.swap || cause.count !== 0 || !options.onUnresolvedAssignment) throw error
     layer.owner.unresolved.push({
@@ -391,7 +399,7 @@ function interpretRoot(
       const structural = [...own.structural, ...layers].sort((a, b) => b.owner.rank - a.owner.rank)
       const root = resolveRoot(raw, source, record.superseded, structural, rank)
       const subtree = root.effective
-        ? expandBase(owner, root.effective, root.groups, root.descendant, rank)
+        ? expandBase(owner, { ...root, effective: root.effective }, rank)
         : expandChildren(id, source, bindings, root.groups, root.descendant, rank)
       const occurrence = createOccurrence(id, raw, source, root, subtree, record.claims)
       assignedFields.set(occurrence, record.bound)
@@ -420,12 +428,13 @@ function interpretRoot(
    */
   const expandBase = (
     owner: Owner,
-    effective: GUID,
-    groups: readonly AssignmentGroup[],
-    descendant: readonly StructuralLayer[],
+    { effective, replaced, groups, descendant }: RootResolution & { effective: GUID },
     rank: number
   ): Subtree => {
     owner.mainComponentId = terminalComponent(index, guidToString(effective))
+    const crossing = descendant.map((layer) =>
+      replaced.length ? { ...layer, boundary: { replaced, path: layer.path } } : layer
+    )
     const rootLayers = groups
       .filter((group) => group.assignments.length)
       .map(
@@ -436,7 +445,7 @@ function interpretRoot(
           assignments: group.assignments
         })
       )
-    const base = expand(guidToString(effective), [], [...rootLayers, ...descendant], rank + 1)
+    const base = expand(guidToString(effective), [], [...rootLayers, ...crossing], rank + 1)
     return { base, children: base.children }
   }
 

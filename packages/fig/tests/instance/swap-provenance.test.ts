@@ -119,3 +119,59 @@ test('an outer swap retires inherited claims against removed descendants', () =>
     expect(() => resolveOccurrencePath(result, claim.path)).not.toThrow()
   expect(interpretInstance(changes, '1:7').propertyClaims).toHaveLength(1)
 })
+
+// material3 List: an outer owner swaps a list item to another variant, and the item's own
+// saved swap of a trailing checkbox still addresses the original variant's child.
+test('an outer swap retires an inherited nested swap against the replaced component', () => {
+  const changes = [
+    { guid: guid(1), type: 'SYMBOL', name: 'Checkbox' },
+    { guid: guid(2), type: 'SYMBOL', name: 'Switch' },
+    { guid: guid(10), type: 'SYMBOL', name: 'Item with checkbox' },
+    { guid: guid(11), type: 'FRAME', parentIndex: { guid: guid(10), position: '!' } },
+    {
+      guid: guid(12),
+      type: 'INSTANCE',
+      parentIndex: { guid: guid(11), position: '!' },
+      symbolData: { symbolID: guid(1) }
+    },
+    { guid: guid(20), type: 'SYMBOL', name: 'Item without checkbox' },
+    {
+      guid: guid(21),
+      type: 'TEXT',
+      parentIndex: { guid: guid(20), position: '!' },
+      textData: { characters: 'Plain' }
+    },
+    { guid: guid(30), type: 'SYMBOL', name: 'List' },
+    {
+      guid: guid(31),
+      type: 'INSTANCE',
+      parentIndex: { guid: guid(30), position: '!' },
+      symbolData: {
+        symbolID: guid(10),
+        symbolOverrides: [{ guidPath: { guids: [guid(12)] }, overriddenSymbolID: guid(2) }]
+      }
+    },
+    {
+      guid: guid(40),
+      type: 'INSTANCE',
+      symbolData: {
+        symbolID: guid(30),
+        symbolOverrides: [{ guidPath: { guids: [guid(31)] }, overriddenSymbolID: guid(20) }]
+      }
+    }
+  ] as NodeChange[]
+  const item = interpretInstance(changes, '1:40').children[0]
+  expect(item.mainComponentId).toBe('1:20')
+  expect(item.children[0].properties.textData?.characters).toBe('Plain')
+  // Without the outer swap the nested swap still applies.
+  expect(interpretInstance(changes, '1:31').children[0].children[0].mainComponentId).toBe('1:2')
+  // A nested swap that never resolved anywhere remains an error.
+  const broken = structuredClone(changes)
+  const inner = broken.find((node) => node.guid?.localID === 31)
+  if (!inner?.symbolData) throw new Error('Missing inner instance')
+  inner.symbolData = {
+    symbolID: guid(10),
+    symbolOverrides: [{ guidPath: { guids: [guid(99)] }, overriddenSymbolID: guid(2) }]
+  } as NodeChange['symbolData']
+  expect(() => interpretInstance(broken, '1:40')).toThrow('found 0')
+})

@@ -13,6 +13,13 @@ export interface Owner {
   readonly unresolved: InstanceAssignmentDiagnostic[]
 }
 
+/** The last instance boundary a layer crossed whose component was replaced. */
+export interface ReplacedBoundary {
+  readonly replaced: readonly GUID[]
+  /** The layer's path relative to that boundary. */
+  readonly path: readonly GUID[]
+}
+
 /** A swap or assignment addressed relative to the expansion that receives it. */
 export interface StructuralLayer {
   readonly owner: Owner
@@ -21,6 +28,8 @@ export interface StructuralLayer {
   readonly path: readonly GUID[]
   readonly swap?: GUID
   readonly assignments: readonly ComponentPropAssignment[]
+  /** Set when an outer decision replaced a component this layer was written against. */
+  readonly boundary?: ReplacedBoundary
 }
 
 export interface PropertyLayer {
