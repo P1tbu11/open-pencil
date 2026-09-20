@@ -28,7 +28,9 @@ test('full Accordion source records preserve independent labels while reporting 
     'Is it styled?',
     'Is it animated?'
   ])
-  expect(diagnostics).toHaveLength(3)
+  // The first item is swapped to 7:251, which has no 7:95 occurrence; only the two
+  // triggers that exist in the result report the stale 7:93 path.
+  expect(diagnostics).toHaveLength(2)
   for (const diagnostic of diagnostics) {
     expect(diagnostic).toEqual({
       ownerId: '7:95',

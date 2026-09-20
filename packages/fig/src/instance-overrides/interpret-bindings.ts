@@ -12,6 +12,10 @@ export interface PropertyBinding {
   id: GUID
   value: ComponentPropValue
   origin: 'default' | 'assignment'
+  /** Expansion depth of the owner that assigned the value; smaller is further out. */
+  rank?: number
+  /** Values this binding replaced, innermost first; claims may still address them. */
+  superseded?: ComponentPropValue[]
 }
 
 function sameId(a: GUID, b: GUID): boolean {
@@ -38,7 +42,8 @@ function assignmentValue(assignment: ComponentPropAssignment): ComponentPropValu
 
 export function instanceBindings(
   defaults: readonly PropertyBinding[],
-  assignments: readonly ComponentPropAssignment[]
+  assignments: readonly ComponentPropAssignment[],
+  rank?: number
 ): PropertyBinding[] {
   const result = structuredClone([...defaults])
   for (const assignment of assignments) {
@@ -47,11 +52,19 @@ export function instanceBindings(
     const binding: PropertyBinding = {
       id: assignment.defID,
       value: structuredClone(value),
-      origin: 'assignment'
+      origin: 'assignment',
+      ...(rank === undefined ? {} : { rank })
     }
     const index = result.findIndex((entry) => sameId(entry.id, binding.id))
-    if (index === -1) result.push(binding)
-    else result[index] = binding
+    if (index === -1) {
+      result.push(binding)
+      continue
+    }
+    const previous = result[index]
+    result[index] = {
+      ...binding,
+      superseded: [...(previous.superseded ?? []), structuredClone(previous.value)]
+    }
   }
   return result
 }
@@ -60,28 +73,15 @@ export function componentBindings(source: NodeChange): PropertyBinding[] {
   const definitions = source.componentPropDefs as ComponentPropDef[] | undefined
   return (definitions ?? []).flatMap((definition) =>
     definition.id && definition.initialValue
-      ? [{ id: definition.id, value: structuredClone(definition.initialValue), origin: 'default' }]
+      ? [
+          {
+            id: definition.id,
+            value: structuredClone(definition.initialValue),
+            origin: 'default'
+          }
+        ]
       : []
   )
-}
-
-export function fieldsBoundByAssignments(
-  source: NodeChange,
-  assignments: readonly ComponentPropAssignment[]
-): ReadonlySet<string> {
-  const bindings = instanceBindings([], assignments)
-  const refs = source.componentPropRefs as
-    | (ComponentPropRef & { isDeleted?: boolean })[]
-    | undefined
-  const fields = new Set<string>()
-  for (const ref of refs ?? []) {
-    const id = ref.defID
-    if (!id || ref.isDeleted || !bindings.some((binding) => sameId(binding.id, id))) continue
-    if (ref.componentPropNodeField === 'TEXT_DATA') fields.add('textData')
-    if (ref.componentPropNodeField === 'VISIBLE') fields.add('visible')
-    if (ref.componentPropNodeField === 'OVERRIDDEN_SYMBOL_ID') fields.add('symbolData')
-  }
-  return fields
 }
 
 export interface BoundPropertyClaim {
@@ -93,7 +93,7 @@ export interface BoundPropertyClaim {
 export function bindSourceProperties(
   source: NodeChange,
   bindings: readonly PropertyBinding[],
-  record?: (claim: BoundPropertyClaim) => void
+  record?: (claim: BoundPropertyClaim, binding: PropertyBinding) => void
 ): NodeChange {
   const result = structuredClone(source)
   const refs = source.componentPropRefs as
@@ -105,7 +105,7 @@ export function bindSourceProperties(
     if (!binding) continue
     const { value, origin } = binding
     const claim = (field: BoundPropertyClaim['field']): void => {
-      record?.({ definitionId: structuredClone(binding.id), field, origin })
+      record?.({ definitionId: structuredClone(binding.id), field, origin }, binding)
     }
     if (ref.componentPropNodeField === 'VISIBLE' && value.boolValue !== undefined) {
       result.visible = value.boolValue

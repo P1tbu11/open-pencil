@@ -2,15 +2,23 @@
 
 ```mermaid
 flowchart TD
-  Defaults[Component defaults and scoped assignments] --> Expansion[Component expansion]
-  Expansion --> Structural[Structural overrides]
-  Structural --> Claims[Explicit path claims]
+  Layers[Owner layers: swaps, assignments, property claims] --> Route[Route structural layers to the instance they configure]
+  Route --> Expand[Expand each occurrence once with its effective component and bindings]
+  Expand --> Claims[Owners apply property claims onto the built subtree, inner to outer]
   Claims --> Derived[Saved occurrence-derived data]
   Derived --> Result[Effective values and provenance]
 ```
 
-This is an overview of evaluation stages, not a universal last-write-wins rule. Nested
-owners, binding scopes, placed-root geometry, and replacement data impose additional rules.
+The model has three parts. An instance expands its component's subtree. Every owner
+contributes *layers*: a partial record at a path relative to that owner. Where layers
+overlap, the outermost owner wins.
+
+A layer is *structural* when it carries a swap (`overriddenSymbolID`) or component-property
+assignments; it selects what a nested instance expands. Everything else is a *property* layer.
+Structural layers are routed down to the instance they address before it expands, so each
+occurrence expands exactly once with its effective component and complete assignment list.
+Property layers are applied by their declaring owner after its subtree is built, which keeps
+their values in that owner's coordinate space and orders inner owners before outer ones.
 
 ## Addressing
 
@@ -50,9 +58,10 @@ Definitions with `parentPropDefId` inherit semantics within source ancestry whil
 local property identity. Current typed `varValue` and `PROP_REF` parameter records are
 normalized alongside older property forms.
 
-**Implemented:** occurrence-local re-expansion preserves unrelated explicit claims. Newer
-bindings retire claims on the fields they supersede. Swaps retire claims against removed
-subtrees. A known removed target is not remapped onto a similarly named replacement child.
+**Implemented:** an outer owner's assignment supersedes an inner owner's explicit claim on the
+same field; unrelated fields of that claim are kept. A claim whose path passes through a swapped
+instance and resolved in the replaced component is stale and dropped. A missing target that did
+not resolve there either is reported, never remapped onto a similarly named replacement child.
 
 ## Worked precedence example
 
@@ -67,9 +76,9 @@ Effective result            "Assigned"      0.4
 Retained intermediate claim --              0.4
 ```
 
-This illustrates the tested binding re-expansion case: the outer assignment supersedes the
-intermediate text claim without erasing unrelated opacity. It is not a universal ordering of
-all possible Figma fields.
+The outer assignment supersedes the intermediate text claim without erasing unrelated opacity.
+Within one owner, its assignments bind before its explicit claims, so an explicit child claim
+wins over that owner's own assignment to the same field.
 
 ```text
 BEFORE SWAP                         AFTER SWAP
@@ -107,6 +116,8 @@ applicable. Partial evaluation is research support, not successful production ac
 ## Implementation and tests
 
 - [Interpreter](../src/instance-overrides/interpret.ts)
+- [Static source routing](../src/instance-overrides/source-index.ts)
+- [Occurrence path resolution](../src/instance-overrides/occurrence-path.ts)
 - [Binding evaluation](../src/instance-overrides/interpret-bindings.ts)
 - [Text provenance](../src/instance-overrides/text-provenance.ts)
 - [Addressing tests](../tests/instance/addressing.test.ts)
@@ -115,5 +126,6 @@ applicable. Partial evaluation is research support, not successful production ac
 - [Swap provenance tests](../tests/instance/swap-provenance.test.ts)
 - [Name capture provenance](../tests/instance/fixtures/README.md)
 
-**Known limitation:** field coverage and provenance transitions are not complete. The current
-recipe/patch-restoration implementation must not be mistaken for a finalized evaluation model.
+**Known limitation:** field coverage and provenance transitions are not complete. Assignments
+whose definition only exists on a detached ancestor are reported as unresolved rather than
+remapped through `detachedSymbolId` lineage.
