@@ -9,8 +9,11 @@ import type {
 import { DEFAULT_STROKE_MITER_LIMIT, forEachInstanceOverride } from '@open-pencil/scene-graph'
 import type { Color, GUID, Matrix, Vector } from '@open-pencil/scene-graph/primitives'
 
-import { SCALAR_OVERRIDE_FIELDS } from '../instance-overrides/field-contract'
-import { LAYOUT_DISTANCE_FIELDS } from '../instance-overrides/layout-scale'
+import {
+  LAYOUT_DISTANCE_FIELDS,
+  SCALAR_OVERRIDE_FIELDS,
+  SCENE_OVERRIDE_FIELDS
+} from '../instance-overrides/fields'
 import type { DerivedSymbolOverride } from '../instance-overrides/types'
 import { effectiveFigmaRawNodeFields, effectiveFigmaSourcePayload } from '../source-metadata'
 /* eslint-disable max-lines */
@@ -476,9 +479,7 @@ function paddingOverride(
   if (field === 'layoutAlignSelf' && typeof value === 'string')
     return { stackChildAlignSelf: value }
   if (field === 'layoutGrow' && typeof value === 'number') return { stackChildPrimaryGrow: value }
-  const rawField = Object.hasOwn(LAYOUT_DISTANCE_FIELDS, field)
-    ? LAYOUT_DISTANCE_FIELDS[field as keyof typeof LAYOUT_DISTANCE_FIELDS]
-    : undefined
+  const rawField = LAYOUT_DISTANCE_FIELDS[field]
   if (!rawField || typeof value !== 'number') return undefined
   const scale = instance.componentScale
   if (!Number.isFinite(scale) || scale <= 0) throw new Error('Invalid instance uniform scale')
@@ -524,23 +525,8 @@ function serializeRuntimePropertyOverrides(
   const collect = (owner: SceneNode): void => {
     forEachInstanceOverride(owner.instanceOverrides, (nodeId, field, value) => {
       if (
-        ![
-          ...Object.keys(SCALAR_OVERRIDE_FIELDS),
-          'text',
-          'visible',
-          'componentId',
-          'width',
-          'height',
-          'textStyleId',
-          'fills',
-          'strokes',
-          'textAutoResize',
-          'layoutGrow',
-          'primaryAxisSizing',
-          'counterAxisSizing',
-          'layoutAlignSelf',
-          ...Object.keys(LAYOUT_DISTANCE_FIELDS)
-        ].includes(field) &&
+        field !== 'componentId' &&
+        !SCENE_OVERRIDE_FIELDS.has(field as keyof SceneNode) &&
         !field.startsWith('boundVariables/')
       )
         return
@@ -560,7 +546,7 @@ function serializeRuntimePropertyOverrides(
           result.push({ guidPath: { guids: path }, parameterConsumptionMap: { entries: [entry] } })
         return
       }
-      if (field in SCALAR_OVERRIDE_FIELDS) {
+      if ((SCALAR_OVERRIDE_FIELDS as readonly string[]).includes(field)) {
         result.push({ guidPath: { guids: path }, [field]: target[field as keyof SceneNode] })
         return
       }

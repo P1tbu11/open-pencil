@@ -4,9 +4,8 @@ import { createDefaultSourceMetadata } from '@open-pencil/scene-graph/node-defau
 
 import { nodeChangeToProps } from '../node-change'
 import { numericVariableBindingScales } from '../node-change/variable-bindings'
+import { OVERRIDE_FIELDS, type OverrideField, type RawOverrideField } from './fields'
 import { resolveOccurrencePath, type InstanceOccurrence } from './interpret'
-import { LAYOUT_DISTANCE_FIELDS } from './layout-scale'
-import { recordScalarOverrideClaims } from './scalar-claims'
 import type { SymbolData } from './types'
 import {
   recordVariableBindingClaims,
@@ -153,6 +152,14 @@ export function materializeInstance(
   return { root, nodes }
 }
 
+/** Whether a raw claim actually carries the scene value its kind maps to. */
+function claimApplies(field: OverrideField, value: unknown, target: SceneNode): boolean {
+  if (field.kind === 'text')
+    return typeof value === 'object' && value !== null && 'characters' in value
+  if (field.kind === 'text-style') return Boolean(target.textStyleId)
+  return true
+}
+
 function recordPropertyClaims(nodes: ReadonlyMap<InstanceOccurrence, SceneNode>): void {
   for (const [ownerOccurrence, owner] of nodes) {
     if (owner.type !== 'INSTANCE') continue
@@ -160,60 +167,22 @@ function recordPropertyClaims(nodes: ReadonlyMap<InstanceOccurrence, SceneNode>)
       const targetOccurrence = resolveOccurrencePath(ownerOccurrence, claim.path)
       const target = nodes.get(targetOccurrence)
       if (!target) throw new Error('Unmaterialized property claim target')
-      recordScalarOverrideClaims(owner, target, claim.properties as NodeChange)
-      for (const [rawField, field] of [
-        ['fillPaints', 'fills'],
-        ['strokePaints', 'strokes']
-      ] as const) {
-        if (rawField in claim.properties)
+      for (const raw of Object.keys(OVERRIDE_FIELDS) as RawOverrideField[]) {
+        if (!(raw in claim.properties)) continue
+        const field = OVERRIDE_FIELDS[raw]
+        if (!claimApplies(field, claim.properties[raw], target)) continue
+        for (const scene of field.scene) {
+          const value = target[scene]
           setInstanceOverride(
             owner.instanceOverrides,
             owner.id,
             target.id,
-            field,
-            structuredClone(target[field])
+            scene,
+            structuredClone(value)
           )
+        }
       }
       recordVariableBindingClaims(owner, target, claim.properties as NodeChange)
-      if ('visible' in claim.properties) {
-        setInstanceOverride(owner.instanceOverrides, owner.id, target.id, 'visible', target.visible)
-      }
-      for (const field of Object.keys(LAYOUT_DISTANCE_FIELDS) as Array<
-        keyof typeof LAYOUT_DISTANCE_FIELDS
-      >) {
-        if (LAYOUT_DISTANCE_FIELDS[field] in claim.properties) {
-          setInstanceOverride(owner.instanceOverrides, owner.id, target.id, field, target[field])
-        }
-      }
-      if ('styleIdForText' in claim.properties && target.textStyleId) {
-        setInstanceOverride(
-          owner.instanceOverrides,
-          owner.id,
-          target.id,
-          'textStyleId',
-          target.textStyleId
-        )
-      }
-      if ('size' in claim.properties) {
-        setInstanceOverride(owner.instanceOverrides, owner.id, target.id, 'width', target.width)
-        setInstanceOverride(owner.instanceOverrides, owner.id, target.id, 'height', target.height)
-      }
-      for (const [rawField, field] of [
-        ['textAutoResize', 'textAutoResize'],
-        ['stackChildPrimaryGrow', 'layoutGrow'],
-        ['stackPrimarySizing', 'primaryAxisSizing'],
-        ['stackCounterSizing', 'counterAxisSizing'],
-        ['stackChildAlignSelf', 'layoutAlignSelf']
-      ] as const) {
-        if (rawField in claim.properties)
-          setInstanceOverride(owner.instanceOverrides, owner.id, target.id, field, target[field])
-      }
-      if ('textData' in claim.properties) {
-        const textData = claim.properties.textData
-        if (textData && typeof textData === 'object' && 'characters' in textData) {
-          setInstanceOverride(owner.instanceOverrides, owner.id, target.id, 'text', target.text)
-        }
-      }
     }
   }
 }

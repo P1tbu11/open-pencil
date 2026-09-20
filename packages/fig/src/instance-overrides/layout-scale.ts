@@ -1,30 +1,46 @@
 import type { NodeChange } from '@open-pencil/kiwi/fig/codec'
 
+import { LAYOUT_DISTANCE_FIELDS } from './fields'
 import type { InstanceOccurrence } from './interpret'
 import { scaleTextLayout } from './text-scale'
 import type { SymbolData } from './types'
 
 // Distances only: sizing modes, grow factors, and alignment are dimensionless.
-export const LAYOUT_DISTANCE_FIELDS = {
-  itemSpacing: 'stackSpacing',
-  counterAxisSpacing: 'stackCounterSpacing',
-  paddingLeft: 'stackHorizontalPadding',
-  paddingTop: 'stackVerticalPadding',
-  paddingRight: 'stackPaddingRight',
-  paddingBottom: 'stackPaddingBottom'
-} as const
 const LAYOUT_DISTANCES = ['stackPadding', ...Object.values(LAYOUT_DISTANCE_FIELDS)] as const
+const VISUAL_LENGTHS = [
+  'strokeWeight',
+  'cornerRadius',
+  'rectangleTopLeftCornerRadius',
+  'rectangleTopRightCornerRadius',
+  'rectangleBottomLeftCornerRadius',
+  'rectangleBottomRightCornerRadius'
+] as const
+const TEXT_LENGTHS = [
+  'fontSize',
+  'lineHeight',
+  'letterSpacing',
+  'textData',
+  'derivedTextData'
+] as const
+
+/**
+ * Every field the scaler touches. An instance record declares these in placed space, so
+ * after its expansion is scaled the record's own values are restored verbatim.
+ */
+const SCALED_FIELDS = [
+  ...LAYOUT_DISTANCES,
+  ...VISUAL_LENGTHS,
+  ...TEXT_LENGTHS,
+  'dashPattern',
+  'effects',
+  'size',
+  'transform'
+] as const
 
 function scaleRawVisualProps(props: NodeChange, factor: number): void {
-  if (typeof props.strokeWeight === 'number') props.strokeWeight *= factor
-  if (typeof props.cornerRadius === 'number') props.cornerRadius *= factor
-  for (const field of [
-    'rectangleTopLeftCornerRadius',
-    'rectangleTopRightCornerRadius',
-    'rectangleBottomLeftCornerRadius',
-    'rectangleBottomRightCornerRadius'
-  ] as const) {
-    if (typeof props[field] === 'number') props[field] *= factor
+  for (const field of VISUAL_LENGTHS) {
+    const value = props[field]
+    if (typeof value === 'number') props[field] = value * factor
   }
   if (props.dashPattern) props.dashPattern = props.dashPattern.map((value) => value * factor)
   if (props.effects)
@@ -75,16 +91,8 @@ export function applyInstanceLayoutScale(root: InstanceOccurrence, source: NodeC
     for (const child of node.children) visit(child)
   }
   visit(root)
-  for (const field of LAYOUT_DISTANCES) {
-    if (source[field] !== undefined) root.properties[field] = source[field]
+  for (const field of SCALED_FIELDS) {
+    const value = source[field]
+    if (value !== undefined) Object.assign(root.properties, { [field]: structuredClone(value) })
   }
-  if (source.strokeWeight !== undefined) root.properties.strokeWeight = source.strokeWeight
-  if (source.fontSize !== undefined) root.properties.fontSize = source.fontSize
-  if (source.lineHeight) root.properties.lineHeight = structuredClone(source.lineHeight)
-  if (source.letterSpacing) root.properties.letterSpacing = structuredClone(source.letterSpacing)
-  if (source.textData) root.properties.textData = structuredClone(source.textData)
-  if (source.derivedTextData)
-    root.properties.derivedTextData = structuredClone(source.derivedTextData)
-  if (source.size) root.properties.size = structuredClone(source.size)
-  if (source.transform) root.properties.transform = structuredClone(source.transform)
 }
