@@ -17,7 +17,7 @@ import {
   restoreComponentCheckpoint,
   type ComponentCheckpoint
 } from './component/checkpoint'
-import { linkComponentPropertyValues } from './component/values'
+import { linkComponentPropertyValues, resolveVariantPropertyValues } from './component/values'
 import { applyDocumentLayoutBindings } from './layout-bindings'
 import { loadPageTransaction } from './load-transaction'
 import { applyDocumentMetadata } from './metadata'
@@ -269,6 +269,7 @@ function materializeReader(
   }
   linkComponentPropertyValues(graph, sources, existingNodeIds)
   graph.preserveSourceMetadataDuring(() => {
+    resolveVariantPropertyValues(graph, existingNodeIds)
     applyDocumentLayoutBindings(graph, savedSizeNodes, existingNodeIds, layoutScales)
     applyDocumentPaintBindings(graph, existingNodeIds)
   })

@@ -59,7 +59,7 @@ heavy('fig component metadata import', () => {
     )
     expect(variant.variantPropSpecs.length).toBeGreaterThan(0)
     expect(variant.componentPropertyValues.State).toBe('Disabled')
-    expect(variant.componentPropertyValues.Style).toBe('Tonal')
+    expect(Object.keys(variant.componentPropertyValues).sort()).toEqual(['Size', 'State', 'Type'])
     expect(Object.keys(variant.componentPropertyValues).some((key) => key.includes(':'))).toBe(
       false
     )

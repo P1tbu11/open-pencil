@@ -24,3 +24,24 @@ export function linkComponentPropertyValues(
     }
   }
 }
+
+/**
+ * A variant's saved specs name the component set's variant definitions by id. Its own
+ * definitions never include those, so the names resolve only once the set is materialized.
+ */
+export function resolveVariantPropertyValues(
+  graph: SceneGraph,
+  existingNodeIds: ReadonlySet<string> = new Set()
+): void {
+  for (const node of graph.getAllNodes()) {
+    if (existingNodeIds.has(node.id) || node.type !== 'COMPONENT' || !node.parentId) continue
+    if (node.variantPropSpecs.length === 0) continue
+    const parent = graph.getNode(node.parentId)
+    if (parent?.type !== 'COMPONENT_SET') continue
+    const names = new Map(parent.componentPropertyDefinitions.map((def) => [def.id, def.name]))
+    const values: Record<string, string> = {}
+    for (const spec of node.variantPropSpecs)
+      values[names.get(spec.propDefId) ?? spec.propDefId] = spec.value
+    graph.updateNode(node.id, { componentPropertyValues: values })
+  }
+}
