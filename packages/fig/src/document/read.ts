@@ -74,6 +74,7 @@ function createScopedReader(
     (change) => change.type === 'VARIABLE' || change.type === 'VARIABLE_SET'
   )
   const closure = collectSceneDependencies(changes, pageIds)
+  // Deleted components are interpreted per instance; broken hierarchy is not recoverable.
   if (closure.missingIds.size)
     throw new Error(`Missing reachable sources: ${[...closure.missingIds].join(', ')}`)
   const sceneChanges = changes.filter(

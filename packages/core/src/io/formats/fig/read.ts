@@ -29,7 +29,7 @@ function parseFigFileSync(buffer: ArrayBuffer, options: ParseFigFileOptions = {}
   options.onPages?.(reader.pages)
   options.signal?.throwIfAborted()
   const bytes = buffer.slice(0)
-  registerReaderSession(bytes, reader.session)
+  registerReaderSession(bytes, reader.session, reader.diagnostics)
   registerOriginalArchiveRequest(reader.graph, async () => new Uint8Array(bytes.slice(0)))
   return reader.graph
 }

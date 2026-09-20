@@ -10,7 +10,10 @@ export interface SceneDependencyClosure {
   contentIds: ReadonlySet<string>
   /** Required ownership containers, without automatically including their siblings. */
   ancestorIds: ReadonlySet<string>
+  /** Referenced records the archive lacks: broken hierarchy or style references. */
   missingIds: ReadonlySet<string>
+  /** Components instances or defaults reference that Figma has since deleted. */
+  missingComponentIds: ReadonlySet<string>
   externalPreferredKeys: ReadonlySet<string>
 }
 
@@ -21,6 +24,28 @@ function validatePageSelection(
   if (!pageIds) return
   for (const id of pageIds)
     if (sources.get(id)?.type !== 'CANVAS') throw new Error(`Unknown page ${id}`)
+}
+
+/** Ownership chains above content, stopping where an earlier chain already continues. */
+function collectAncestors(
+  sources: ReadonlyMap<string, NodeChange>,
+  contentIds: ReadonlySet<string>,
+  ancestorIds: Set<string>,
+  missingIds: Set<string>
+): void {
+  for (const id of contentIds) {
+    let node = sources.get(id)
+    const visited = new Set<string>([id])
+    while (node?.parentIndex?.guid) {
+      const parent = guidToString(node.parentIndex.guid)
+      if (visited.has(parent)) throw new Error(`Cyclic source hierarchy at ${parent}`)
+      visited.add(parent)
+      if (ancestorIds.has(parent)) break
+      ancestorIds.add(parent)
+      node = sources.get(parent)
+      if (!node) missingIds.add(parent)
+    }
+  }
 }
 
 /** Plan reachability without deleting records or expanding unrelated internal siblings. */
@@ -47,6 +72,8 @@ export function collectSceneDependencies(
   const ancestorIds = new Set<string>()
   const externalPreferredKeys = new Set<string>()
   const missingIds = new Set<string>()
+  const missingComponentIds = new Set<string>()
+  const componentReferences = new Set<string>()
   validatePageSelection(sources, pageIds)
   const pending = changes
     .filter(
@@ -60,28 +87,21 @@ export function collectSceneDependencies(
     if (!id || contentIds.has(id)) continue
     const node = sources.get(id)
     if (!node) {
-      missingIds.add(id)
+      if (componentReferences.has(id)) missingComponentIds.add(id)
+      else missingIds.add(id)
       continue
     }
     contentIds.add(id)
+    const components = componentDependencies(node, resolveReference, (key) =>
+      externalPreferredKeys.add(key)
+    )
+    for (const component of components) componentReferences.add(component)
     pending.push(
       ...(children.get(id) ?? []),
       ...styleDependencies(node, resolveReference, availableIds),
-      ...componentDependencies(node, resolveReference, (key) => externalPreferredKeys.add(key))
+      ...components
     )
   }
-  for (const id of contentIds) {
-    let node = sources.get(id)
-    const visited = new Set<string>([id])
-    while (node?.parentIndex?.guid) {
-      const parent = guidToString(node.parentIndex.guid)
-      if (visited.has(parent)) throw new Error(`Cyclic source hierarchy at ${parent}`)
-      visited.add(parent)
-      if (ancestorIds.has(parent)) break
-      ancestorIds.add(parent)
-      node = sources.get(parent)
-      if (!node) missingIds.add(parent)
-    }
-  }
-  return { contentIds, ancestorIds, missingIds, externalPreferredKeys }
+  collectAncestors(sources, contentIds, ancestorIds, missingIds)
+  return { contentIds, ancestorIds, missingIds, missingComponentIds, externalPreferredKeys }
 }

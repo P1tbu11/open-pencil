@@ -76,5 +76,6 @@ test('includes component ownership without pulling in unrelated internal definit
       symbolData: { symbolID: guid(99) }
     }
   ])
-  expect([...reached.missingIds]).toEqual(['1:99'])
+  expect([...reached.missingComponentIds]).toEqual(['1:99'])
+  expect(reached.missingIds.size).toBe(0)
 })

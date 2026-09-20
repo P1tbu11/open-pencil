@@ -1,11 +1,16 @@
 import { expect, test } from 'bun:test'
 
-import { interpretInstance } from '#fig/instance-overrides/interpret'
+import {
+  interpretComponent,
+  interpretInstance,
+  type MissingComponentDiagnostic
+} from '#fig/instance-overrides/interpret'
 import { materializeInstance } from '#fig/instance-overrides/materialize-instance'
 
 import type { NodeChange } from '@open-pencil/kiwi/fig/codec'
 import { SceneGraph } from '@open-pencil/scene-graph'
 
+import { guid } from '../helpers/guid'
 import fixture from './fixtures/accordion-source-closure.json'
 
 function setup() {
@@ -91,4 +96,39 @@ test('rejects missing components before creating occurrence nodes', () => {
     'Missing materialized component'
   )
   expect(graph.nodes.size).toBe(count)
+})
+
+// Figma keeps an instance whose main component was deleted, with its saved reference.
+test('an instance of a deleted component stays a childless instance when acknowledged', () => {
+  const changes = [
+    { guid: guid(1, 4), type: 'SYMBOL' },
+    {
+      guid: guid(2, 4),
+      type: 'INSTANCE',
+      parentIndex: { guid: guid(1, 4), position: '!' },
+      name: 'Orphan',
+      size: { x: 10, y: 10 },
+      symbolData: {
+        symbolID: guid(9, 4),
+        symbolOverrides: [{ guidPath: { guids: [guid(8, 4)] }, opacity: 0.5 }]
+      }
+    }
+  ] as NodeChange[]
+  expect(() => interpretComponent(changes, '4:1')).toThrow('Missing source node 4:9')
+  const missing: MissingComponentDiagnostic[] = []
+  const component = interpretComponent(changes, '4:1', {
+    onMissingComponent: (diagnostic) => missing.push(diagnostic)
+  })
+  expect(missing).toEqual([{ ownerId: '4:2', componentId: '4:9' }])
+  const orphan = component.children[0]
+  expect(orphan.mainComponentId).toBeNull()
+  expect(orphan.children).toEqual([])
+  expect(orphan.properties.symbolData?.symbolID).toEqual(guid(9, 4))
+  const graph = new SceneGraph()
+  const page = graph.getPages()[0]
+  const materialized = materializeInstance(graph, page.id, component, new Map())
+  const node = graph.getChildren(materialized.root.id)[0]
+  expect(node.type).toBe('INSTANCE')
+  expect(node.componentId).toBeNull()
+  expect(node.childIds).toEqual([])
 })

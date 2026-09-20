@@ -94,12 +94,14 @@ test('edited export loads missing pages on an isolated graph', async () => {
   releaseFigPopulationWorker(reopened)
 })
 
-test('export rejects unresolved internal dependencies without changing the live graph', async () => {
+// Figma keeps property defaults that name a deleted component; so does an edited export.
+test('export tolerates a deleted internal default without changing the live graph', async () => {
   const graph = await parseFigFile(await fixture(true), { populate: 'first-page' })
   const page = graph.getPages()[0]
   graph.updateNode(page.id, { name: 'Edited' })
   const before = structuredClone([...graph.nodes])
-  await expect(exportFigFile(graph)).rejects.toThrow('Missing reachable sources')
+  const bytes = await exportFigFile(graph)
+  expect(bytes.byteLength).toBeGreaterThan(0)
   expect([...graph.nodes]).toEqual(before)
   releaseFigPopulationWorker(graph)
 })

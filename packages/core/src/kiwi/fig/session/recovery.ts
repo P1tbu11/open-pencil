@@ -22,9 +22,15 @@ export function registerReaderRecovery(
 
 export function registerReaderSession(
   bytes: ArrayBuffer,
-  session: ReturnType<typeof createFigDocumentSession>
+  session: ReturnType<typeof createFigDocumentSession>,
+  diagnostics: FigReaderDiagnostic[] = []
 ): void {
-  states.set(session.graph, { bytes, session, diagnostics: [] })
+  states.set(session.graph, { bytes, session, diagnostics })
+}
+
+/** Records skipped while opening, recovering, or exporting this graph's document. */
+export function readerDiagnostics(graph: SceneGraph): readonly FigReaderDiagnostic[] {
+  return states.get(graph)?.diagnostics ?? []
 }
 
 export function isReaderPagePending(graph: SceneGraph, pageId: string): boolean {

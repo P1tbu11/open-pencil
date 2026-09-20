@@ -56,8 +56,12 @@ resources that are not live content. Dependency discovery follows selected page 
 component references, supported INSTANCE_SWAP defaults/assignments, and preferred choices.
 Ownership ancestors do not imply that unrelated siblings must be expanded.
 
-Required missing components fail. Unavailable preferred choices are recorded separately as
-external choices. This distinction does not permit ignoring a missing effective dependency.
+Components the archive no longer contains are reported by the closure as
+`missingComponentIds`; broken hierarchy or style references remain fatal `missingIds`. Figma
+keeps instances of deleted components, so with `onMissingComponent` the interpreter keeps such
+an instance as a childless occurrence that retains its saved reference and reports the owner;
+without it, expansion fails. Unavailable preferred choices are recorded separately as external
+choices. Neither permits ignoring a missing effective dependency silently.
 
 `ancestorPathBeforeDeletion` alone is **not** a liveness flag: Figma can retain it on live
 component sets. Current hierarchy and reference semantics must be considered independently.

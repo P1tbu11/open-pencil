@@ -96,6 +96,12 @@ export interface InstanceAssignmentDiagnostic extends InstancePathDiagnostic {
   assignments: readonly ComponentPropAssignment[]
 }
 
+/** An instance whose main component the archive no longer contains. */
+export interface MissingComponentDiagnostic {
+  ownerId: string
+  componentId: string
+}
+
 export { resolveOccurrencePath } from './occurrence-path'
 
 export interface InterpretInstanceOptions {
@@ -105,6 +111,11 @@ export interface InterpretInstanceOptions {
   onUnresolvedProperty?: (diagnostic: InstancePathDiagnostic) => void
   /** Explicit partial evaluation: report and skip missing assignment targets. Swaps remain fatal. */
   onUnresolvedAssignment?: (diagnostic: InstanceAssignmentDiagnostic) => void
+  /**
+   * Keep an instance of a deleted component as a childless instance that retains its
+   * saved reference, the way Figma does, instead of rejecting the document.
+   */
+  onMissingComponent?: (diagnostic: MissingComponentDiagnostic) => void
 }
 
 export function interpretInstance(
@@ -405,7 +416,10 @@ function interpretRoot(
       assignedFields.set(occurrence, record.bound)
       if (subtree.base && root.replaced.length) replacedComponents.set(occurrence, root.replaced)
       declareSourceVariableBindingUnits(occurrence, source)
-      finishOccurrence(occurrence, subtree.base, source, own.claims, rank)
+      const claims = subtree.dangling
+        ? own.claims.filter(({ path }) => path.length === 1 && isRootGuid(occurrence, path[0]))
+        : own.claims
+      finishOccurrence(occurrence, subtree.base, source, claims, rank, !subtree.dangling)
       for (const diagnostic of owner.unresolved)
         options.onUnresolvedAssignment?.({
           ...diagnostic,
@@ -420,6 +434,8 @@ function interpretRoot(
   interface Subtree {
     base: InstanceOccurrence | null
     children: InstanceOccurrence[]
+    /** The component is gone; only the record itself remains addressable. */
+    dangling?: true
   }
 
   /**
@@ -431,7 +447,14 @@ function interpretRoot(
     { effective, replaced, groups, descendant }: RootResolution & { effective: GUID },
     rank: number
   ): Subtree => {
-    owner.mainComponentId = terminalComponent(index, guidToString(effective))
+    const componentId = guidToString(effective)
+    if (!sources.has(componentId)) {
+      // Layers addressed into the missing subtree have nothing to configure.
+      if (!options.onMissingComponent) throw new Error(`Missing source node ${componentId}`)
+      options.onMissingComponent({ ownerId: owner.id, componentId })
+      return { base: null, children: [], dangling: true }
+    }
+    owner.mainComponentId = terminalComponent(index, componentId)
     const crossing = descendant.map((layer) =>
       replaced.length ? { ...layer, boundary: { replaced, path: layer.path } } : layer
     )
@@ -546,7 +569,8 @@ function interpretRoot(
     base: InstanceOccurrence | null,
     source: NodeChange,
     claims: readonly PropertyLayer[],
-    rank: number
+    rank: number,
+    derived: boolean
   ): void => {
     for (const claim of claims) {
       const target = resolveClaimTarget(occurrence, claim.path)
@@ -556,7 +580,7 @@ function interpretRoot(
     applyPlacedConstraints(occurrence, base, source)
     if (source.type === 'INSTANCE' && source.size)
       occurrence.properties.size = structuredClone(source.size)
-    applyDerivedBounds(occurrence, source)
+    if (derived) applyDerivedBounds(occurrence, source)
   }
 
   if (sources.get(rootId)?.type !== expectedType) {
