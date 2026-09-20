@@ -1,4 +1,8 @@
 {
+  "unsavedChanges": "Modifications non enregistrées",
+  "saveBeforeClosing": "Enregistrer les modifications de « {name} » ?",
+  "saveBeforeClosingDescription": "Si vous fermez sans enregistrer, vos modifications seront perdues.",
+  "discard": "Ne pas enregistrer",
   "importLabel": "Importer",
   "importHTMLCSS": "Importer du HTML/CSS",
   "importHTMLCSSDescription": "Collez du HTML avec, si besoin, du CSS ou du CSS Tailwind compilé.",
@@ -21,7 +25,5 @@
   "newDesign": "Nouveau design",
   "noMatchingFiles": "Aucun fichier ne correspond à « {query} ».",
   "saveAsPrompt": "Enregistrer sous :",
-  "browserFileAPINotSupported": "Votre navigateur ne prend pas en charge l’API de fichiers locaux. Les fichiers seront téléchargés au lieu d’être enregistrés sur place.",
-  "useChrome": "Utiliser Chrome",
-  "orEdgeForFullSupport": "ou Edge pour une prise en charge complète."
+  "browserFileAPINotSupported": "Votre navigateur ne prend pas en charge l’API de fichiers locaux. Les fichiers seront téléchargés au lieu d’être enregistrés sur place."
 }

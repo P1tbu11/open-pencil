@@ -1,4 +1,6 @@
 import { createDefaultEditorState, type EditorState } from '@open-pencil/core/editor'
+import type { DocumentColorSpace } from '@open-pencil/scene-graph'
+import type { PresentationColorSpace } from '@open-pencil/vue'
 
 import type { EditorPreparation } from '@/app/editor/preparation/types'
 import type { NodeEditState } from '@/app/editor/vector/types'
@@ -15,7 +17,6 @@ export function createInitialAppEditorState(pageId: string): AppEditorState {
     panelMode: 'design',
     actionToast: null,
     mobileDrawerSnap: 'closed',
-    clipboardHTML: '',
     autosaveEnabled: false,
     cursorCanvasX: null,
     cursorCanvasY: null,
@@ -23,7 +24,9 @@ export function createInitialAppEditorState(pageId: string): AppEditorState {
     renameSelectionOpen: false,
     renameNodeId: null,
     numberFieldFocused: false,
-    preparation: null
+    preparation: null,
+    canvasPresentation: null,
+    documentColorSpace: 'srgb'
   }
 }
 
@@ -35,7 +38,6 @@ export type AppEditorState = EditorState & {
   panelMode: 'layers' | 'design'
   actionToast: string | null
   mobileDrawerSnap: 'closed' | 'half' | 'full'
-  clipboardHTML: string
   autosaveEnabled: boolean
   cursorCanvasX: number | null
   cursorCanvasY: number | null
@@ -44,4 +46,8 @@ export type AppEditorState = EditorState & {
   renameNodeId: string | null
   numberFieldFocused: boolean
   preparation: EditorPreparation | null
+  /** Color space the canvas is presenting, reported by the surface. */
+  canvasPresentation: PresentationColorSpace | null
+  /** Mirror of the document's color space, kept reactive for UI. */
+  documentColorSpace: DocumentColorSpace
 }

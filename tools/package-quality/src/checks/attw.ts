@@ -1,26 +1,19 @@
+import { runCommand } from '@open-pencil/package-artifacts'
+
 import { publicPackageDirs } from '../packages'
+import { runPackageChecks } from './run'
 
-let failed = false
+// ATTW packs distinct package directories; bound concurrent TypeScript analyses.
+const TYPE_CHECK_CONCURRENCY = 2
 
-for (const packageDir of publicPackageDirs) {
-  const proc = Bun.spawnSync(
-    ['bun', 'attw', '--pack', packageDir, '--profile', 'esm-only', '--format', 'ascii'],
-    {
-      stdout: 'pipe',
-      stderr: 'pipe'
-    }
+export async function checkTypes(root: string): Promise<void> {
+  await runPackageChecks(
+    (await publicPackageDirs(root)).map((packageDir) => ({
+      command: 'bun',
+      args: ['attw', '--pack', packageDir, '--profile', 'esm-only', '--format', 'ascii'],
+      cwd: root
+    })),
+    runCommand,
+    TYPE_CHECK_CONCURRENCY
   )
-
-  const stdout = proc.stdout.toString()
-  const stderr = proc.stderr.toString()
-  if (!proc.success) {
-    console.error(`ATTW failed for ${packageDir}`)
-    if (stdout) console.error(stdout)
-    if (stderr) console.error(stderr)
-    failed = true
-  }
 }
-
-if (failed) process.exit(1)
-
-console.log('ATTW package type-resolution checks passed.')

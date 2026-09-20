@@ -20,9 +20,15 @@ describe('startTextEditing — path-text font gate', () => {
     const editor = createEditor()
     const page = editor.state.currentPageId
     const box = { x: 0, y: 0, width: 200, height: 200 }
-
-    const path = {
-      network: { vertices: [], segments: [], regions: [] },
+    const textPathData = {
+      network: {
+        vertices: [
+          { x: 0, y: 100 },
+          { x: 200, y: 100 }
+        ],
+        segments: [{ start: 0, end: 1, tangentStart: { x: 0, y: 0 }, tangentEnd: { x: 0, y: 0 } }],
+        regions: []
+      },
       normalizedSize: { x: 200, y: 200 },
       tValue: 0,
       forward: true
@@ -33,7 +39,7 @@ describe('startTextEditing — path-text font gate', () => {
       text: 'ab',
       fontFamily: 'Inter',
       fontWeight: 400,
-      textPathData: structuredClone(path),
+      textPathData: structuredClone(textPathData),
       textPathBox: { ...box }
     })
     editor.startTextEditing(editable.id)
@@ -45,7 +51,7 @@ describe('startTextEditing — path-text font gate', () => {
       text: 'ab',
       fontFamily: 'NoSuchFont',
       fontWeight: 400,
-      textPathData: structuredClone(path),
+      textPathData: structuredClone(textPathData),
       textPathBox: { ...box }
     })
     editor.startTextEditing(baked.id)

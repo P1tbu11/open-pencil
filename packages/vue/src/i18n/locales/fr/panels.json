@@ -346,5 +346,11 @@
   "brightness": "Luminosité",
   "lightness": "Clarté",
   "chroma": "Chroma",
-  "alpha": "Alpha"
+  "alpha": "Alpha",
+  "individualPadding": "Marges intérieures individuelles",
+  "strokeSettings": "Paramètres du contour",
+  "strokeDashLength": "Tiret",
+  "strokeDashGap": "Espacement",
+  "lineHeightMode": "Mode de hauteur de ligne",
+  "unresolvedVariable": "Valeur de variable indisponible"
 }

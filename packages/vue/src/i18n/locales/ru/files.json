@@ -1,4 +1,8 @@
 {
+  "unsavedChanges": "Несохранённые изменения",
+  "saveBeforeClosing": "Сохранить изменения в «{name}»?",
+  "saveBeforeClosingDescription": "Если закрыть документ без сохранения, изменения будут потеряны.",
+  "discard": "Не сохранять",
   "importLabel": "Импорт",
   "importHTMLCSS": "Импорт HTML/CSS",
   "importHTMLCSSDescription": "Вставьте HTML и, при необходимости, CSS или скомпилированный Tailwind CSS.",
@@ -21,7 +25,5 @@
   "newDesign": "Новый дизайн",
   "noMatchingFiles": "Нет файлов по запросу «{query}».",
   "saveAsPrompt": "Сохранить как:",
-  "browserFileAPINotSupported": "Ваш браузер не поддерживает API локальных файлов. Вместо сохранения на месте файлы будут скачиваться.",
-  "useChrome": "Использовать Chrome",
-  "orEdgeForFullSupport": "или Edge для полной поддержки."
+  "browserFileAPINotSupported": "Ваш браузер не поддерживает API локальных файлов. Вместо сохранения на месте файлы будут скачиваться."
 }

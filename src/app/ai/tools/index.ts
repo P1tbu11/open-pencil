@@ -1,39 +1,32 @@
-import { valibotSchema } from '@ai-sdk/valibot'
 import { tool } from 'ai'
-import * as v from 'valibot'
 
-import {
-  CORE_TOOLS,
-  EXTENDED_TOOLS,
-  registerComponentCatalog,
-  toolsToAI
-} from '@open-pencil/core/tools'
-import type { StepBudget, ToolLogEntry } from '@open-pencil/core/tools'
+import { registerComponentCatalog, isAtomicTool, toolsToAI } from '@open-pencil/core/tools'
+import type { StepBudget } from '@open-pencil/core/tools'
 import type { SceneNode } from '@open-pencil/scene-graph'
 
+import { DEFAULT_AGENT_STEPS, resolveAgentStepLimit } from '@/app/ai/chat/step-limit'
 import { makeFigmaFromStore } from '@/app/automation/bridge/figma-factory'
+import { executeAtomicEditorTool } from '@/app/automation/execution/editor'
+import { recordToolCompleted, type AIDiagnosticContext } from '@/app/diagnostics/events/ai'
 import { getActiveEditorStore } from '@/app/editor/active-store'
 import type { EditorStore } from '@/app/editor/active-store'
 import { ensureGraphFonts } from '@/app/editor/fonts'
 import { useLibraryService } from '@/app/libraries'
 
-export const MAX_AGENT_STEPS = 50
+import { aiToolDefinitions } from './catalog'
 
 class RunState {
-  toolLog: ToolLogEntry[] = []
   currentSteps = 0
+  /** Captured for the message in progress; settings changes apply to the next one. */
+  maxSteps = DEFAULT_AGENT_STEPS
 
-  resetSteps(): void {
+  resetSteps(maxSteps: number): void {
     this.currentSteps = 0
+    this.maxSteps = resolveAgentStepLimit(maxSteps)
   }
 
   hitLimit(): boolean {
-    return this.currentSteps >= MAX_AGENT_STEPS
-  }
-
-  clear(): void {
-    this.toolLog = []
-    this.currentSteps = 0
+    return this.currentSteps >= this.maxSteps
   }
 }
 
@@ -48,27 +41,19 @@ function getRunState(store?: EditorStore): RunState {
   return created
 }
 
-export function getToolLogEntries(store?: EditorStore): ToolLogEntry[] {
-  return getRunState(store).toolLog
-}
-
 export function recordStep(store?: EditorStore): void {
   getRunState(store).currentSteps++
 }
 
-export function resetRunSteps(store?: EditorStore): void {
-  getRunState(store).resetSteps()
+export function resetRunSteps(store: EditorStore, maxSteps: number): void {
+  getRunState(store).resetSteps(maxSteps)
 }
 
 export function didHitStepLimit(store?: EditorStore): boolean {
   return getRunState(store).hitLimit()
 }
 
-export function clearToolLogEntries(store?: EditorStore): void {
-  getRunState(store).clear()
-}
-
-export function createAITools(store: EditorStore) {
+export function createAITools(store: EditorStore, diagnosticContext?: AIDiagnosticContext) {
   let beforeSnapshot: Map<string, SceneNode> | null = null
   const runState = getRunState(store)
   const libraryService = useLibraryService()
@@ -76,15 +61,13 @@ export function createAITools(store: EditorStore) {
   registerComponentCatalog(store.graph, libraryService)
 
   return toolsToAI(
-    [
-      ...CORE_TOOLS,
-      ...EXTENDED_TOOLS.filter((def) =>
-        ['get_components', 'list_libraries', 'insert_library_component'].includes(def.name)
-      )
-    ],
+    aiToolDefinitions,
     {
       getFigma: () => makeFigmaFromStore(store),
       executeTool: async (def, figma, args) => {
+        if (isAtomicTool(def)) {
+          return executeAtomicEditorTool(store, figma, def, args, { label: 'AI' })
+        }
         if (def.mutates) beforeSnapshot = store.snapshotPage()
         return def.mutates
           ? store.runMutationWithLayout(
@@ -98,6 +81,7 @@ export function createAITools(store: EditorStore) {
           : def.execute(figma, args)
       },
       onAfterExecute: async (def) => {
+        if (isAtomicTool(def)) return
         if (def.mutates) {
           store.requestRender()
           if (beforeSnapshot) {
@@ -119,14 +103,22 @@ export function createAITools(store: EditorStore) {
         }
       },
       onToolLog: (entry) => {
-        runState.toolLog.push(entry)
+        recordToolCompleted(
+          {
+            tool: entry.tool,
+            durationMs: entry.durationMs,
+            mutates: entry.mutates,
+            failed: Boolean(entry.error)
+          },
+          diagnosticContext
+        )
       },
       getStepBudget: (): StepBudget => ({
         current: runState.currentSteps,
-        max: MAX_AGENT_STEPS
+        max: runState.maxSteps
       })
     },
-    { v, valibotSchema, tool }
+    { tool }
   )
 }
 

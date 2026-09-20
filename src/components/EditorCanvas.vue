@@ -1,9 +1,4 @@
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch, type Component } from 'vue'
-import {
-  AUTO_LAYOUT_PADDING_EDITOR_OFFSET_X,
-  AUTO_LAYOUT_PADDING_EDITOR_OFFSET_Y
-} from '@open-pencil/core/constants'
 import {
   ContextMenuPortal,
   ContextMenuRoot,
@@ -12,7 +7,16 @@ import {
   PopoverPortal,
   PopoverRoot
 } from 'reka-ui'
+import { computed, onUnmounted, ref, watch, type Component } from 'vue'
+import IconLucidePanelBottom from '~icons/lucide/panel-bottom'
+import IconLucidePanelLeft from '~icons/lucide/panel-left'
+import IconLucidePanelRight from '~icons/lucide/panel-right'
+import IconLucidePanelTop from '~icons/lucide/panel-top'
 
+import {
+  AUTO_LAYOUT_PADDING_EDITOR_OFFSET_X,
+  AUTO_LAYOUT_PADDING_EDITOR_OFFSET_Y
+} from '@open-pencil/core/constants'
 import {
   toolCursor,
   useCanvas,
@@ -21,19 +25,17 @@ import {
   useCanvasVirtualReference,
   useTextEdit
 } from '@open-pencil/vue'
+
 import { useCollabInjected } from '@/app/collab/use'
 import { useEditorStore } from '@/app/editor/active-store'
-import { appRuntimeConfig } from '@/app/runtime/config'
 import { useCanvasCollaborationAwareness } from '@/app/editor/canvas/collaboration-awareness'
 import { createCanvasContextSelection } from '@/app/editor/canvas/context-selection'
-import IconLucidePanelBottom from '~icons/lucide/panel-bottom'
-import IconLucidePanelLeft from '~icons/lucide/panel-left'
-import IconLucidePanelRight from '~icons/lucide/panel-right'
-import IconLucidePanelTop from '~icons/lucide/panel-top'
+import { appRuntimeConfig } from '@/app/runtime/config'
+import PreparationOverlay from '@/components/preparation/canvas/Overlay.vue'
+
+import CanvasMenu from './canvas/CanvasMenu.vue'
 import CanvasLabelEditor from './canvas/labels/CanvasLabelEditor.vue'
 import { canvasLabelPresentation } from './canvas/labels/presentation'
-import CanvasMenu from './canvas/CanvasMenu.vue'
-import PreparationOverlay from '@/components/preparation/canvas/Overlay.vue'
 import NumberField from './inputs/NumberField.vue'
 
 const { paneId } = defineProps<{
@@ -56,9 +58,10 @@ function updatePaneCursor(cx: number, cy: number) {
 }
 
 const getRenderState = paneId ? () => store.getPaneRenderState(paneId) : undefined
-const onViewportResize = paneId
-  ? (width: number, height: number) => store.resizePane(paneId, width, height)
-  : undefined
+const onViewportResize = (width: number, height: number) => {
+  if (paneId) store.resizePane(paneId, width, height)
+  if (isActivePane.value) store.setViewportSize(width, height)
+}
 
 const { updateCursor } = useCanvasCollaborationAwareness(store, collab)
 const { selectAtContextPoint } = createCanvasContextSelection(canvasRef, store)
@@ -71,18 +74,25 @@ const shouldSuspendRender = () =>
 useCanvas(sceneCanvasRef, store, {
   layer: 'scene',
   sceneRenderer: appRuntimeConfig.sceneRenderer,
+  onReady: store.markCanvasReady,
   shouldSuspendRender,
   showRulers: false,
   getRenderState,
   onViewportResize,
   onPresented: ({ sceneVersion }) =>
-    store.preparationController.acknowledgePresentation(sceneVersion)
+    store.preparationController.acknowledgePresentation(sceneVersion),
+  onPresentation: (colorSpace) => {
+    store.state.canvasPresentation = colorSpace
+  }
 })
 const { hitTestSectionTitle, hitTestComponentLabel, hitTestFrameTitle } = useCanvas(
   canvasRef,
   store,
   {
     layer: 'overlays',
+    get showRulers() {
+      return appRuntimeConfig.showRulers && store.state.showRulers
+    },
     shouldSuspendRender,
     getRenderState,
     onViewportResize

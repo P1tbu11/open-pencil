@@ -7,7 +7,7 @@ import {
 
 import type { SkiaRenderer } from '#core/canvas/renderer'
 
-type EmittedGraphEventName = Exclude<keyof SceneGraphEvents, 'node:previewUpdated'>
+type EmittedGraphEventName = keyof SceneGraphEvents
 
 type GraphEventOptions = {
   getGraph: () => SceneGraph
@@ -90,6 +90,7 @@ export function createGraphEventSubscription(options: GraphEventOptions) {
       changes,
       nodePicture
     )
+    options.emitEditorEvent('node:previewUpdated', id, changes)
   }
 
   function onNodeStructureChanged(nodeId: string) {

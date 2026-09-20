@@ -18,6 +18,8 @@ export { createEditor, EDITOR_TOOLS, TOOL_SHORTCUTS } from '@open-pencil/core/ed
 export { provideEditor, useEditor, EDITOR_KEY } from '#vue/editor/context'
 
 /** Canvas and input integration composables. */
+export { supportsWideGamutPresentation } from '#vue/canvas/surface/color-space'
+export type { PresentationColorSpace } from '#vue/canvas/surface/color-space'
 export { useCanvas } from '#vue/canvas/surface/use'
 export type { UseCanvasOptions } from '#vue/canvas/surface/use'
 export { useCanvasInput } from '#vue/canvas/useCanvasInput'
@@ -31,6 +33,11 @@ export { useNodeProps, MIXED } from '#vue/controls/node-props/use'
 export type { MixedValue } from '#vue/controls/node-props/use'
 export { useSceneComputed } from '#vue/internal/scene-computed/use'
 export { useSelectionState } from '#vue/editor/selection-state/use'
+export { createSelectedNodeState } from '#vue/editor/selection-state/nodes'
+export { provideRetainedActivity, useRetainedActivity } from '#vue/lifecycle/retention/context'
+export { createRetainedScopePlugin } from '#vue/lifecycle/retention/plugin'
+export { useRetainedPopup } from '#vue/lifecycle/retention/popup'
+export type { SelectedNodeState } from '#vue/editor/selection-state/nodes'
 export { useEditorEvent } from '#vue/editor/events/use'
 export { useSelectionCapabilities } from '#vue/editor/selection-capabilities/use'
 

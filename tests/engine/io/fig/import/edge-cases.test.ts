@@ -4,7 +4,7 @@ import { parseFigFile } from '@open-pencil/core'
 import { materializeDocument } from '@open-pencil/fig'
 
 import { expectDefined } from '#tests/helpers/assert'
-import { parseFixture } from '#tests/helpers/fig/fixtures'
+import { sharedGoldPreviewFixture } from '#tests/helpers/fig/fixtures'
 
 setDefaultTimeout(60_000)
 
@@ -498,7 +498,7 @@ describe('edge cases', () => {
   })
 
   test('DSD propagates through intermediate clones that are also DSD-targeted', async () => {
-    const graph = await parseFixture('gold-preview.fig')
+    const { graph } = await sharedGoldPreviewFixture()
 
     const thumb = [...graph.getAllNodes()].find((n) => n.name === 'Preview Thumbnail')
     expect(thumb).toBeDefined()

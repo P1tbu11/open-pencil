@@ -1,60 +1,16 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { join } from 'node:path'
 
 import lintPlugin from '#lint/plugin.ts'
 import { normalizedFilename } from '#lint/support/context.ts'
 
-interface Diagnostic {
-  code: string
-  filename: string
-  message: string
-}
+import { resolveWorkspaceRoot } from '@open-pencil/package-artifacts'
 
-interface LintResult {
-  diagnostics: Diagnostic[]
-}
+import { lint, ruleDiagnostics } from './helpers/lint.ts'
 
 const temporaryDirectories: string[] = []
-const pluginPath = resolve(import.meta.dir, '../../../lint/plugin.js')
-const oxlintPath = resolve(import.meta.dir, '../../../node_modules/.bin/oxlint')
-
-async function lint(
-  source: string,
-  rules: Record<string, string>,
-  relativePath = 'fixture.ts'
-): Promise<Diagnostic[]> {
-  const directory = await mkdtemp(join(tmpdir(), 'open-pencil-lint-'))
-  temporaryDirectories.push(directory)
-  const sourcePath = join(directory, relativePath)
-  const configPath = join(directory, 'oxlint.json')
-  await mkdir(dirname(sourcePath), { recursive: true })
-  await writeFile(sourcePath, source)
-  await writeFile(
-    configPath,
-    JSON.stringify({
-      plugins: ['typescript', 'vue'],
-      jsPlugins: [pluginPath],
-      rules
-    })
-  )
-
-  const process = Bun.spawn([oxlintPath, '-c', configPath, '--format', 'json', sourcePath], {
-    stdout: 'pipe',
-    stderr: 'pipe'
-  })
-  const [output, errorOutput] = await Promise.all([
-    new Response(process.stdout).text(),
-    new Response(process.stderr).text()
-  ])
-  const exitCode = await process.exited
-  try {
-    return (JSON.parse(output) as LintResult).diagnostics
-  } catch {
-    throw new Error(`oxlint exited ${exitCode} without JSON output.\nstderr: ${errorOutput}`)
-  }
-}
 
 async function runRule(ruleName: string, source: string, filename: string): Promise<number> {
   const plugin = lintPlugin
@@ -74,9 +30,30 @@ async function runRule(ruleName: string, source: string, filename: string): Prom
   return reports
 }
 
-function ruleDiagnostics(diagnostics: Diagnostic[], rule: string): Diagnostic[] {
-  return diagnostics.filter((diagnostic) => diagnostic.code === `open-pencil(${rule})`)
-}
+test('domain naming uses ownership prefixes, not control-kind suffixes', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'open-pencil-domains-'))
+  temporaryDirectories.push(directory)
+  await mkdir(join(directory, 'list'))
+  expect(
+    await runRule('no-sibling-domain-prefixed-files', '', join(directory, 'page-list.ts'))
+  ).toBe(0)
+  expect(
+    await runRule('no-sibling-domain-prefixed-files', '', join(directory, 'list-actions.ts'))
+  ).toBe(1)
+})
+
+test('storage rule permits data keys but rejects storage access', async () => {
+  const rule = 'no-direct-storage-access'
+  for (const [source, count] of [
+    ['const state = {localStorage: []}', 0],
+    ['localStorage.clear()', 1],
+    ['window.sessionStorage.clear()', 1],
+    ['const value = {localStorage}', 1]
+  ] as const) {
+    const diagnostics = await lint(source, { [`open-pencil/${rule}`]: 'error' })
+    expect(ruleDiagnostics(diagnostics, rule)).toHaveLength(count)
+  }
+})
 
 afterEach(async () => {
   await Promise.all(
@@ -195,6 +172,7 @@ describe('path support', () => {
 
 describe('plugin entrypoint', () => {
   test('loads all custom rules through the compatibility entrypoint', async () => {
+    const pluginPath = join(await resolveWorkspaceRoot(import.meta.dir), 'lint/plugin.js')
     const module = (await import(pluginPath)) as { default: typeof lintPlugin }
     expect(Object.keys(module.default.rules)).toContain('no-conditional-object-spreads')
     expect(Object.keys(module.default.rules).length).toBeGreaterThan(60)

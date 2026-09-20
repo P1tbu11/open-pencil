@@ -1,4 +1,8 @@
 {
+  "unsavedChanges": "Niezapisane zmiany",
+  "saveBeforeClosing": "Zapisać zmiany w „{name}”?",
+  "saveBeforeClosingDescription": "Jeśli zamkniesz dokument bez zapisywania, zmiany zostaną utracone.",
+  "discard": "Nie zapisuj",
   "importLabel": "Importuj",
   "importHTMLCSS": "Importuj HTML/CSS",
   "importHTMLCSSDescription": "Wklej HTML oraz opcjonalnie CSS lub skompilowany CSS Tailwind.",
@@ -21,7 +25,5 @@
   "newDesign": "Nowy projekt",
   "noMatchingFiles": "Brak plików pasujących do „{query}”.",
   "saveAsPrompt": "Zapisz jako:",
-  "browserFileAPINotSupported": "Twoja przeglądarka nie obsługuje interfejsu API plików lokalnych. Pliki będą pobierane zamiast zapisywane w bieżącym miejscu.",
-  "useChrome": "Użyj Chrome",
-  "orEdgeForFullSupport": "lub Edge, aby uzyskać pełną obsługę."
+  "browserFileAPINotSupported": "Twoja przeglądarka nie obsługuje interfejsu API plików lokalnych. Pliki będą pobierane zamiast zapisywane w bieżącym miejscu."
 }

@@ -96,9 +96,8 @@ function sameNodeReferences(
     a.every((value, index) => {
       const other = b[index]
       if (other === undefined) return false
-      if (ctx.aGraph.getNode(value) || ctx.bGraph.getNode(other)) {
-        return sameNodeReference(ctx, value, other)
-      }
+      if (sameNodeReference(ctx, value, other)) return true
+      if (ctx.aGraph.getNode(value) || ctx.bGraph.getNode(other)) return false
       // Preferred choices may be retained external asset keys rather than graph nodes.
       // A missing runtime/source GUID must not be accepted as an external asset.
       return !/^\d+:\d+$/.test(value) && value === other
@@ -418,6 +417,7 @@ export const RAW_VERIFIERS = new Map<string, Verifier>([
       return true
     }
   ],
+  ['textAlignHorizontal', defaultEqual('LEFT')],
   ['borderRightWeight', defaultEqual(0)],
   ['borderLeftWeight', defaultEqual(0)],
   ['borderTopWeight', defaultEqual(0)],

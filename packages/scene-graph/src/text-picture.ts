@@ -22,15 +22,20 @@ export const GLYPH_AFFECTING_KEYS: ReadonlySet<string> = new Set(TEXT_SHAPING_FI
  * two invalidation rules cannot drift. Glyphs are kept when the caller
  * replaces them in the same update (resize supplies scaled copies).
  */
-export function invalidateTextCaches(node: SceneNode, changes: Partial<SceneNode>): void {
+export function textCacheInvalidationChanges(
+  node: SceneNode,
+  changes: Partial<SceneNode>
+): Partial<SceneNode> {
+  const invalidated: Partial<SceneNode> = {}
   const keys = Object.keys(changes).filter(
     (key) => !isEqual(node[key as keyof SceneNode], changes[key as keyof SceneNode])
   )
-  if (node.textPicture && keys.some((key) => TEXT_PICTURE_KEYS.has(key))) node.textPicture = null
+  if (node.textPicture && keys.some((key) => TEXT_PICTURE_KEYS.has(key)))
+    invalidated.textPicture = null
   const glyphsInvalidated =
     keys.some((key) => GLYPH_AFFECTING_KEYS.has(key)) ||
     TEXT_LAYOUT_FIELDS.some((key) => keys.includes(key))
-  if (glyphsInvalidated && !('derivedLayout' in changes)) node.derivedLayout = null
+  if (glyphsInvalidated && !('derivedLayout' in changes)) invalidated.derivedLayout = null
   // A successful path-text edit supplies reflowed glyphs in `changes`. Every
   // other mutation path must drop stale baked glyphs and path identity rather
   // than pair new text/style with old visible outlines.
@@ -39,8 +44,14 @@ export function invalidateTextCaches(node: SceneNode, changes: Partial<SceneNode
     // preview keeps them until that workflow commits or an actual shaping edit occurs.
     const onlyPathBoxResize =
       !!node.textPathData && keys.every((key) => key === 'width' || key === 'height')
-    if (onlyPathBoxResize) return
-    node.derivedTextGlyphs = null
-    node.textPathData = null
+    if (!onlyPathBoxResize) {
+      invalidated.derivedTextGlyphs = null
+      invalidated.textPathData = null
+    }
   }
+  return invalidated
+}
+
+export function invalidateTextCaches(node: SceneNode, changes: Partial<SceneNode>): void {
+  Object.assign(node, textCacheInvalidationChanges(node, changes))
 }

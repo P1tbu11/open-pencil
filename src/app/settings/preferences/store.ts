@@ -2,9 +2,17 @@ import { useLocalStorage } from '@vueuse/core'
 
 import { DEFAULT_SNAPPING_PREFERENCES, type SnappingPreferences } from '@open-pencil/core/editor'
 
+import { DEFAULT_AGENT_STEPS, resolveAgentStepLimit } from '@/app/ai/chat/step-limit'
+
+export type AnimationPreference = 'system' | 'off'
+
+export type ReasoningDisplay = 'collapsed' | 'while-thinking' | 'expanded'
+
 export type CanvasRenderingMode = 'retained' | 'tiled'
 
 export interface AppPreferences {
+  appearance: { animations: AnimationPreference }
+  chat: { reasoningDisplay: ReasoningDisplay; maxAgentSteps: number }
   version: 1
   recovery: {
     enabled: boolean
@@ -18,6 +26,8 @@ export interface AppPreferences {
 }
 
 export const DEFAULT_APP_PREFERENCES: Readonly<AppPreferences> = {
+  appearance: { animations: 'system' },
+  chat: { reasoningDisplay: 'collapsed', maxAgentSteps: DEFAULT_AGENT_STEPS },
   version: 1,
   recovery: { enabled: true },
   editing: {
@@ -39,6 +49,8 @@ interface StoredSnappingPreferences {
 }
 
 interface StoredAppPreferences {
+  appearance?: { animations?: unknown }
+  chat?: { reasoningDisplay?: unknown; maxAgentSteps?: unknown }
   recovery?: { enabled?: unknown }
   editing?: { snapping?: StoredSnappingPreferences }
   rendering?: { canvasMode?: unknown }
@@ -48,11 +60,27 @@ function isStoredAppPreferences(value: unknown): value is StoredAppPreferences {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
+function normalizeAnimationPreference(value: unknown): AnimationPreference {
+  return value === 'off' ? 'off' : 'system'
+}
+
+function normalizeChatPreferences(chat: StoredAppPreferences['chat']): AppPreferences['chat'] {
+  return {
+    maxAgentSteps: resolveAgentStepLimit(chat?.maxAgentSteps),
+    reasoningDisplay:
+      chat?.reasoningDisplay === 'expanded' || chat?.reasoningDisplay === 'while-thinking'
+        ? chat.reasoningDisplay
+        : 'collapsed'
+  }
+}
+
 function normalizePreferences(value: unknown): AppPreferences {
   const stored = isStoredAppPreferences(value) ? value : undefined
   const snapping = stored?.editing?.snapping
 
   return {
+    appearance: { animations: normalizeAnimationPreference(stored?.appearance?.animations) },
+    chat: normalizeChatPreferences(stored?.chat),
     version: 1,
     recovery: {
       enabled: booleanOrDefault(stored?.recovery?.enabled, DEFAULT_APP_PREFERENCES.recovery.enabled)
@@ -84,6 +112,10 @@ export const appPreferences = useLocalStorage<AppPreferences>(
   structuredClone(DEFAULT_APP_PREFERENCES),
   { mergeDefaults: (storageValue) => normalizePreferences(storageValue) }
 )
+
+export function updateAnimationPreference(animations: AnimationPreference): void {
+  appPreferences.value = { ...appPreferences.value, appearance: { animations } }
+}
 
 export function updateRecoveryEnabled(enabled: boolean): void {
   const preferences = structuredClone(appPreferences.value)
