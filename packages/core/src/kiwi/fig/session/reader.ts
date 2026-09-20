@@ -2,13 +2,15 @@ import { createFigDocumentSession } from '@open-pencil/fig'
 import type { FigPageManifestEntry } from '@open-pencil/kiwi/fig'
 
 import { buildFigPopulationDelta, installFigMutationJournal } from '#core/kiwi/fig/population/delta'
+import { readerSessionOptions, type FigReaderDiagnostic } from '#core/kiwi/fig/session/options'
 
 /** Format-neutral worker transport adapter for the FIG reader session. */
 export function openReaderSession(
   bytes: ArrayBuffer,
   populate: 'all' | 'first-page' | 'none' = 'all'
 ) {
-  const session = createFigDocumentSession(bytes, { derivedBounds: true })
+  const diagnostics: FigReaderDiagnostic[] = []
+  const session = createFigDocumentSession(bytes, readerSessionOptions(diagnostics))
   const pages: FigPageManifestEntry[] = session.pages.map((page) => ({
     sourceId: page.id,
     name: page.name,
@@ -33,6 +35,8 @@ export function openReaderSession(
   }
   return {
     session,
+    /** Records skipped so far, including those of pages loaded later. */
+    diagnostics,
     checkpoint: () => session.checkpoint(),
     graph: session.graph,
     pages,

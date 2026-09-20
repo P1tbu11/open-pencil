@@ -8,8 +8,13 @@ import { heavy } from '#tests/helpers/test-utils'
 
 function importFixture(name: string) {
   const { nodeChanges, blobs, images } = parseFigBuffer(readFixtureArrayBuffer(name))
-  return materializeDocument(nodeChanges, blobs, { images: new Map(images), derivedBounds: true })
-    .graph
+  // Library default is strict; skip the stale override records Figma keeps, as the app does.
+  return materializeDocument(nodeChanges, blobs, {
+    images: new Map(images),
+    derivedBounds: true,
+    onUnresolvedProperty: () => undefined,
+    onUnresolvedAssignment: () => undefined
+  }).graph
 }
 
 setDefaultTimeout(30_000)
@@ -40,8 +45,9 @@ heavy('fig component metadata import', () => {
 
     expect(buttonSet.isPublishable).toBe(true)
     expect(buttonSet.symbolDescription).toContain('Buttons communicate actions')
+    // The visible Buttons page copy (57994:2227); internal-only copies carry an http link.
     expect(buttonSet.symbolLinks.map((link) => link.uri)).toContain(
-      'http://m3.material.io/components/buttons/overview'
+      'https://m3.material.io/components/buttons/overview'
     )
     expect(buttonSet.componentPropertyDefinitions.map((def) => def.name)).toContain('State')
 

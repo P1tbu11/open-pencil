@@ -1,10 +1,14 @@
 import { createFigDocumentSession, type FigSessionCheckpoint } from '@open-pencil/fig'
 import type { SceneGraph } from '@open-pencil/scene-graph'
 
+import { readerSessionOptions, type FigReaderDiagnostic } from '#core/kiwi/fig/session/options'
+
 interface RecoveryState {
   bytes: ArrayBuffer
   checkpoint?: FigSessionCheckpoint
   session?: ReturnType<typeof createFigDocumentSession>
+  /** Records skipped by sessions this recovery state has opened. */
+  diagnostics: FigReaderDiagnostic[]
 }
 const states = new WeakMap<SceneGraph, RecoveryState>()
 
@@ -13,14 +17,14 @@ export function registerReaderRecovery(
   bytes: ArrayBuffer,
   checkpoint: FigSessionCheckpoint
 ): void {
-  states.set(graph, { bytes, checkpoint })
+  states.set(graph, { bytes, checkpoint, diagnostics: [] })
 }
 
 export function registerReaderSession(
   bytes: ArrayBuffer,
   session: ReturnType<typeof createFigDocumentSession>
 ): void {
-  states.set(session.graph, { bytes, session })
+  states.set(session.graph, { bytes, session, diagnostics: [] })
 }
 
 export function isReaderPagePending(graph: SceneGraph, pageId: string): boolean {
@@ -56,11 +60,10 @@ export function populateReaderExport(source: SceneGraph, target: SceneGraph): bo
   if (!state) return false
   const checkpoint = state.session?.checkpoint() ?? state.checkpoint
   if (!checkpoint) throw new Error('Missing replacement reader checkpoint')
-  const session = createFigDocumentSession(
-    state.bytes,
-    { derivedBounds: true },
-    { graph: target, checkpoint }
-  )
+  const session = createFigDocumentSession(state.bytes, readerSessionOptions(state.diagnostics), {
+    graph: target,
+    checkpoint
+  })
   // Export must include internal content too, not just the dependency closure needed
   // for visible pages. Loading happens on the isolated target, never the live graph.
   for (const page of session.pages) session.loadPage(page.id)
@@ -81,11 +84,10 @@ export function recoverReaderPage(graph: SceneGraph, pageId: string): boolean {
   if (!state) throw new Error('No replacement reader recovery state')
   if (!state.session) {
     if (!state.checkpoint) throw new Error('Missing replacement reader checkpoint')
-    state.session = createFigDocumentSession(
-      state.bytes,
-      { derivedBounds: true },
-      { graph, checkpoint: state.checkpoint }
-    )
+    state.session = createFigDocumentSession(state.bytes, readerSessionOptions(state.diagnostics), {
+      graph,
+      checkpoint: state.checkpoint
+    })
   }
   const page = state.session.pages.find((page) => state.session?.graphPageId(page.id) === pageId)
   if (!page) throw new Error(`Unknown graph page ${pageId}`)
