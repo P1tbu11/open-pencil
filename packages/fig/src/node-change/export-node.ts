@@ -479,7 +479,9 @@ function paddingOverride(
   if (field === 'layoutAlignSelf' && typeof value === 'string')
     return { stackChildAlignSelf: value }
   if (field === 'layoutGrow' && typeof value === 'number') return { stackChildPrimaryGrow: value }
-  const rawField = LAYOUT_DISTANCE_FIELDS[field]
+  const rawField = Object.hasOwn(LAYOUT_DISTANCE_FIELDS, field)
+    ? LAYOUT_DISTANCE_FIELDS[field]
+    : undefined
   if (!rawField || typeof value !== 'number') return undefined
   const scale = instance.componentScale
   if (!Number.isFinite(scale) || scale <= 0) throw new Error('Invalid instance uniform scale')

@@ -176,11 +176,10 @@ function interpretRoot(
   }
 
   /** A layer written against a component that an outer decision replaced is stale, not wrong. */
-  const isStaleLayer = (layer: StructuralLayer): boolean =>
-    layer.boundary !== undefined &&
-    layer.boundary.replaced.some((component) =>
-      resolvesInSourceComponent(index, component, layer.boundary?.path ?? [])
-    )
+  const isStaleLayer = ({ boundary }: StructuralLayer): boolean =>
+    boundary?.replaced.some((component) =>
+      resolvesInSourceComponent(index, component, boundary.path)
+    ) ?? false
 
   const unresolvedStructural = (layer: StructuralLayer, cause: SegmentError): void => {
     if (cause.count === 0 && isStaleLayer(layer)) return
@@ -263,8 +262,7 @@ function interpretRoot(
       for (const key of componentKeys(effective)) if (!isKey(key)) keys.push(key)
     }
     for (const layer of structural) {
-      const [head] = layer.path
-      const addressesRoot = head === undefined || isKey(head)
+      const addressesRoot = layer.path.length === 0 || isKey(layer.path[0])
       if (!addressesRoot || layer.path.length > 1) {
         descendant.push(addressesRoot ? { ...layer, path: layer.path.slice(1) } : layer)
         continue
