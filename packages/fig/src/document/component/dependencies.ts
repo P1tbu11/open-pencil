@@ -1,4 +1,8 @@
-import { symbolDataOf, type ComponentPropAssignment } from '#fig/instance-overrides/types'
+import {
+  forEachOverrideRecord,
+  symbolDataOf,
+  type ComponentPropAssignment
+} from '#fig/instance-overrides/types'
 
 import type { GUID, NodeChange } from '@open-pencil/kiwi/fig/codec'
 import { guidToString } from '@open-pencil/kiwi/fig/guid'
@@ -24,9 +28,9 @@ export function componentDependencies(
     add(value.value?.guidValue)
     add(value.varValue?.value?.symbolIdValue?.guid)
   }
-  const visit = (source: NodeChange): void => {
-    const symbol = symbolDataOf(source)
-    add(symbol?.symbolID)
+  forEachOverrideRecord(node, (source, override) => {
+    add(symbolDataOf(source)?.symbolID)
+    add(override?.overriddenSymbolID)
     for (const definition of (source.componentPropDefs as DependencyDefinition[] | undefined) ??
       []) {
       if (definition.type === 'INSTANCE_SWAP') {
@@ -50,11 +54,6 @@ export function componentDependencies(
       | ComponentPropAssignment[]
       | undefined) ?? [])
       assignment(value)
-    for (const override of symbol?.symbolOverrides ?? []) {
-      add(override.overriddenSymbolID)
-      visit(override as NodeChange)
-    }
-  }
-  visit(node)
+  })
   return dependencies
 }

@@ -2,6 +2,7 @@ import type { NodeChange } from '@open-pencil/kiwi/fig/codec'
 
 import { LAYOUT_DISTANCE_FIELDS } from './fields'
 import type { InstanceOccurrence } from './interpret'
+import { occurrences } from './occurrence-path'
 import { scaleTextLayout } from './text-scale'
 import { uniformScaleOf } from './types'
 
@@ -63,7 +64,7 @@ export function applyInstanceLayoutScale(root: InstanceOccurrence, source: NodeC
   const factor = uniformScaleOf(source)
   if (!Number.isFinite(factor) || factor <= 0) throw new Error('Invalid instance uniform scale')
   if (factor === 1) return
-  const visit = (node: InstanceOccurrence): void => {
+  for (const node of occurrences(root)) {
     node.layoutScale = (node.layoutScale ?? 1) * factor
     for (const field of Object.keys(node.variableBindingScales ?? {})) {
       if (node.variableBindingScales && field !== 'opacity' && field !== 'rotation')
@@ -88,9 +89,7 @@ export function applyInstanceLayoutScale(root: InstanceOccurrence, source: NodeC
         x: node.derivedSize.x * factor,
         y: node.derivedSize.y * factor
       }
-    for (const child of node.children) visit(child)
   }
-  visit(root)
   for (const field of SCALED_FIELDS) {
     const value = source[field]
     if (value !== undefined) Object.assign(root.properties, { [field]: structuredClone(value) })

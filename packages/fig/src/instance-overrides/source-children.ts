@@ -2,6 +2,7 @@ import { setInstanceOverride, type SceneGraph, type SceneNode } from '@open-penc
 
 import type { InstanceOccurrence } from './interpret'
 import type { MaterializedInstance } from './materialize-instance'
+import { occurrences } from './occurrence-path'
 
 export interface MaterializedComponentOccurrence {
   occurrence: InstanceOccurrence
@@ -47,6 +48,27 @@ export function reconcileOccurrenceStructure(
  * A nested instance therefore has both its own correspondence and the outer
  * owner's correspondence; a swap ends the outer owner's descendant scope.
  */
+/**
+ * Pair each child of a target occurrence with the child of its source occurrence that has
+ * the same source identity. Both sides describe one component's children, so identities
+ * are unique on the source side and every target child has a counterpart.
+ */
+function* pairSourceChildren(
+  target: InstanceOccurrence,
+  source: InstanceOccurrence
+): Generator<[child: InstanceOccurrence, counterpart: InstanceOccurrence]> {
+  const bySource = new Map<string, InstanceOccurrence>()
+  for (const child of source.children) {
+    if (bySource.has(child.sourceId)) throw new Error(`Ambiguous source child ${child.sourceId}`)
+    bySource.set(child.sourceId, child)
+  }
+  for (const child of target.children) {
+    const counterpart = bySource.get(child.sourceId)
+    if (!counterpart) throw new Error(`Missing source child ${child.sourceId}`)
+    yield [child, counterpart]
+  }
+}
+
 export function linkInstanceSourceChildren(
   root: InstanceOccurrence,
   materialized: MaterializedInstance,
@@ -59,16 +81,10 @@ export function linkInstanceSourceChildren(
     owner: SceneNode,
     sourceNodes: ReadonlyMap<InstanceOccurrence, SceneNode>
   ): void => {
-    const index = new Map<string, InstanceOccurrence>()
-    for (const child of source.children) {
-      if (index.has(child.sourceId)) throw new Error(`Ambiguous source child ${child.sourceId}`)
-      index.set(child.sourceId, child)
-    }
-    for (const child of target.children) {
-      const counterpart = index.get(child.sourceId)
+    for (const [child, counterpart] of pairSourceChildren(target, source)) {
       const targetNode = materialized.nodes.get(child)
-      const sourceNode = counterpart && sourceNodes.get(counterpart)
-      if (!counterpart || !targetNode || !sourceNode) {
+      const sourceNode = sourceNodes.get(counterpart)
+      if (!targetNode || !sourceNode) {
         throw new Error(`Missing materialized correspondence for ${child.sourceId}`)
       }
       links.push({ owner, target: targetNode, source: sourceNode })
@@ -77,16 +93,13 @@ export function linkInstanceSourceChildren(
       }
     }
   }
-  const visit = (current: InstanceOccurrence): void => {
-    if (current.mainComponentId !== null) {
-      const component = components.get(current.mainComponentId)
-      const owner = materialized.nodes.get(current)
-      if (!component || !owner) throw new Error(`Missing component ${current.mainComponentId}`)
-      match(current, component.occurrence, owner, component.materialized.nodes)
-    }
-    for (const child of current.children) visit(child)
+  for (const current of occurrences(root)) {
+    if (current.mainComponentId === null) continue
+    const component = components.get(current.mainComponentId)
+    const owner = materialized.nodes.get(current)
+    if (!component || !owner) throw new Error(`Missing component ${current.mainComponentId}`)
+    match(current, component.occurrence, owner, component.materialized.nodes)
   }
-  visit(root)
   for (const { owner, target, source } of links) {
     setInstanceOverride(
       owner.instanceOverrides,
@@ -118,14 +131,7 @@ export function mapInstanceSourceChildren(
     source: InstanceOccurrence,
     nodes: ReadonlyMap<InstanceOccurrence, SceneNode>
   ): void => {
-    const bySource = new Map<string, InstanceOccurrence>()
-    for (const child of source.children) {
-      if (bySource.has(child.sourceId)) throw new Error(`Ambiguous source child ${child.sourceId}`)
-      bySource.set(child.sourceId, child)
-    }
-    for (const child of target.children) {
-      const counterpart = bySource.get(child.sourceId)
-      if (!counterpart) throw new Error(`Missing source child ${child.sourceId}`)
+    for (const [child, counterpart] of pairSourceChildren(target, source)) {
       const node = nodes.get(counterpart)
       if (!node) throw new Error(`Unmaterialized source child ${counterpart.sourceId}`)
       result.set(child, node.id)

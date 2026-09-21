@@ -3,6 +3,17 @@ import { guidToString } from '@open-pencil/kiwi/fig/guid'
 
 import type { InstanceOccurrence, InstancePathDiagnostic } from './interpret'
 import { sameGuid } from './source-index'
+import { descendants, findWithinBoundary, type TreeShape } from './tree'
+
+export const OCCURRENCE_TREE: TreeShape<InstanceOccurrence> = {
+  childrenOf: (node) => node.children,
+  isInstance: (node) => node.mainComponentId !== null
+}
+
+/** Every occurrence below and including `root`, including those inside nested instances. */
+export function occurrences(root: InstanceOccurrence): Generator<InstanceOccurrence> {
+  return descendants(root, (node) => node.children)
+}
 
 export class InstancePathError extends Error {
   constructor(
@@ -43,18 +54,14 @@ export function pathError(
 
 /** Search through ordinary containers, but never cross an instance boundary implicitly. */
 export function findSegment(root: InstanceOccurrence, guid: GUID): InstanceOccurrence {
-  const matches: InstanceOccurrence[] = []
-  const visit = (node: InstanceOccurrence): void => {
-    if (sameGuid(node.overrideKey, guid) || node.sourceId === guidToString(guid)) {
-      matches.push(node)
-      return
-    }
-    if (node.mainComponentId !== null) return
-    for (const child of node.children) visit(child)
-  }
-  for (const child of root.children) visit(child)
-  if (matches.length !== 1) throw new SegmentError(matches.length, guid)
-  return matches[0]
+  const id = guidToString(guid)
+  const { count, match } = findWithinBoundary(
+    root.children,
+    OCCURRENCE_TREE,
+    (node) => sameGuid(node.overrideKey, guid) || node.sourceId === id
+  )
+  if (!match) throw new SegmentError(count, guid)
+  return match
 }
 
 export function isRootGuid(owner: InstanceOccurrence, guid: GUID): boolean {

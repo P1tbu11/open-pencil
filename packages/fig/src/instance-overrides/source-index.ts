@@ -1,6 +1,8 @@
 import type { GUID, NodeChange } from '@open-pencil/kiwi/fig/codec'
 import { guidToString } from '@open-pencil/kiwi/fig/guid'
 
+import { findWithinBoundary, type TreeShape } from './tree'
+
 /** Archive records indexed by GUID, with children in saved order. */
 export interface SourceIndex {
   readonly sources: ReadonlyMap<string, NodeChange>
@@ -75,25 +77,25 @@ export interface StaticMatch {
   topChild?: NodeChange
 }
 
+/** Source records as a tree: children by saved order, instances as boundaries. */
+export function recordTree({ children }: SourceIndex): TreeShape<NodeChange> {
+  return {
+    childrenOf: (record) => children.get(idOf(record) ?? '') ?? [],
+    isInstance: (record) => record.symbolData?.symbolID !== undefined
+  }
+}
+
 /**
  * Find a segment among a record's static descendants, searching through ordinary
  * containers but never into an instance.
  */
-export function findStaticSegment(
-  { children }: SourceIndex,
-  parentId: string,
-  guid: GUID
-): StaticMatch {
-  const matches: { record: NodeChange; topChild: NodeChange }[] = []
-  const visit = (id: string, top: NodeChange | undefined): void => {
-    for (const child of children.get(id) ?? []) {
-      const topChild = top ?? child
-      if (recordMatches(child, guid)) matches.push({ record: child, topChild })
-      else if (!child.symbolData?.symbolID && child.guid) visit(guidToString(child.guid), topChild)
-    }
-  }
-  visit(parentId, undefined)
-  return matches.length === 1 ? { count: 1, ...matches[0] } : { count: matches.length }
+export function findStaticSegment(index: SourceIndex, parentId: string, guid: GUID): StaticMatch {
+  const { count, match, top } = findWithinBoundary(
+    index.children.get(parentId) ?? [],
+    recordTree(index),
+    (record) => recordMatches(record, guid)
+  )
+  return { count, record: match, topChild: top }
 }
 
 /** Whether a path resolves in a component's own source tree, following raw instance links. */

@@ -2,6 +2,7 @@ import type { NodeChange } from '@open-pencil/kiwi/fig/codec'
 import { guidToString } from '@open-pencil/kiwi/fig/guid'
 
 import type { InstanceOccurrence } from '../instance-overrides/interpret'
+import { occurrences } from '../instance-overrides/occurrence-path'
 import { indexRecords, parentIdOf } from '../instance-overrides/source-index'
 
 export interface ComponentConstruction {
@@ -41,10 +42,11 @@ export function planComponentConstruction(
     }
     throw new Error(`Component ${id} has no source page`)
   }
-  const visit = (node: InstanceOccurrence): void => {
-    if (node.mainComponentId !== null) ensure(node.mainComponentId)
-    if (node.properties.type === 'SYMBOL') ensure(node.sourceId)
-    for (const child of node.children) visit(child)
+  const visit = (root: InstanceOccurrence): void => {
+    for (const node of occurrences(root)) {
+      if (node.mainComponentId !== null) ensure(node.mainComponentId)
+      if (node.properties.type === 'SYMBOL') ensure(node.sourceId)
+    }
   }
   const ensure = (id: string): void => {
     if (complete.has(id)) return

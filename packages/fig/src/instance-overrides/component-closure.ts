@@ -10,6 +10,7 @@ import {
   type InterpretInstanceOptions
 } from './interpret'
 import { materializeInstance } from './materialize-instance'
+import { occurrences } from './occurrence-path'
 import {
   linkInstanceSourceChildren,
   mapInstanceSourceChildren,
@@ -41,13 +42,16 @@ export function materializeComponentClosure(
   const components = new Map<string, MaterializedComponentOccurrence>()
   const ids = new Map<string, string>()
   const pending = new Set<string>()
-  const visit = (occurrence: InstanceOccurrence): void => {
-    for (const dependency of componentDependencies(occurrence.properties, resolveReference, (key) =>
-      externalPreferredKeys.add(key)
-    ))
-      propertyDependencies.add(dependency)
-    if (occurrence.mainComponentId !== null) ensure(occurrence.mainComponentId)
-    for (const child of occurrence.children) visit(child)
+  const visit = (root: InstanceOccurrence): void => {
+    for (const occurrence of occurrences(root)) {
+      for (const dependency of componentDependencies(
+        occurrence.properties,
+        resolveReference,
+        (key) => externalPreferredKeys.add(key)
+      ))
+        propertyDependencies.add(dependency)
+      if (occurrence.mainComponentId !== null) ensure(occurrence.mainComponentId)
+    }
   }
   const ensure = (id: string): void => {
     if (components.has(id)) return

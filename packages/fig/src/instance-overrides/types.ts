@@ -33,6 +33,17 @@ export function uniformScaleOf(record: NodeChange): number {
   return symbolDataOf(record)?.uniformScaleFactor ?? 1
 }
 
+/** A record's saved override payloads are partial records; visit the record and all of them. */
+export function forEachOverrideRecord(
+  record: NodeChange,
+  visit: (record: NodeChange, override?: SymbolOverride) => void,
+  override?: SymbolOverride
+): void {
+  visit(record, override)
+  for (const nested of symbolOverridesOf(record))
+    forEachOverrideRecord(nested as NodeChange, visit, nested)
+}
+
 export interface ComponentPropRef {
   defID?: GUID
   componentPropNodeField: string
