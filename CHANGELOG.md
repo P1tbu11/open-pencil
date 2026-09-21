@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- Export the instance overrides you make in OpenPencil to `.fig` beyond text and fill colour — strokes, size, padding and spacing, sizing modes, text styles, visibility, name, opacity, and variable bindings, including the variable bound to an overridden fill — addressed through nested instances so Figma applies each one to the right layer.
+
 ## 0.15.1 — 2026-09-18
 
 ### Added
