@@ -42,6 +42,16 @@ owner + target correspondence
 Do not serialize a nested claim as only its final source GUID. Structured self overrides use
 an empty target ID internally; the exporter must interpret that as the owner, not discard it.
 
+Which scene fields are claimable, which raw field each serializes to, and which are placed-space
+lengths comes from one registry (`instance-overrides/fields.ts`); materialization records
+claims and export serializes them from the same table.
+
+A paint colour alias lives inside the paint, not in the node's parameter map. A `fills` or
+`strokes` claim is therefore written with each paint's `colorVar`, and a
+`boundVariables/fills/N/color` override is serialized as that paint claim rather than as a
+consumption entry, which has no field for it. Reading a claimed paint records its binding claim
+as well, so a later component sync cannot restore the component's variable.
+
 ## Values and layout
 
 - Root size claims and placed sizes occupy different coordinate spaces when uniformly scaled.
@@ -96,3 +106,4 @@ selected passing properties as complete editable-document compatibility.
 - [Edited layout export](../tests/document/layout-edit-export.test.ts)
 - [Shared-style uniqueness](../tests/document/shared-style-export.test.ts)
 - [Full-document editing round trip](../tests/document/gold-edit.test.ts)
+- [Instance paint alias round trip](../../../tests/engine/io/fig/roundtrip/variables.test.ts)

@@ -28,8 +28,10 @@ an automation adapter implements an independent override resolver.
 ## Reader entry points
 
 The package exposes record-based assembly, archive-owned assembly, and incremental sessions.
-They share evaluation/materialization rather than invoking the superseded importer.
-See [document sessions](./document-sessions.md) for ownership and lifecycle details.
+They share one evaluation/materialization path. Core uses it for synchronous parsing, the
+document worker, page population, recovery, export of unloaded pages, and clipboard paste
+(`materializeFigFragment`); CLI and MCP consume Core's `parseFigFile`. See
+[document sessions](./document-sessions.md) for ownership and lifecycle details.
 
 - [Archive parsing and assembly](../src/archive.ts)
 - [Document reader](../src/document/read.ts)
@@ -38,15 +40,15 @@ See [document sessions](./document-sessions.md) for ownership and lifecycle deta
 
 ## Replacement boundary
 
-The finished system has one reader and no post-import repair replay. Reusing independent
-codec, font, geometry, and resource utilities is appropriate; retaining an old interpretation
-algorithm behind renamed wrappers is not.
+There is one reader and no post-import repair replay. The previous importer, its lazy
+population path, and its sync-repair helpers are deleted rather than kept as fallbacks; reusing
+independent codec, font, geometry, and resource utilities is appropriate, retaining an old
+interpretation algorithm behind renamed wrappers is not.
 
-**Known limitation:** the session worker uses the replacement backend, but other parse paths
-and old-reader removal are not yet complete. The cutover audit must cover synchronous import,
-worker import, later-page loading, export of unloaded pages, and every app/CLI/MCP caller.
-Obsolete population, path-resolution, patch-replay, and sync-repair implementations and their
-forwarding exports must be deleted, not kept as fallback behavior.
+**Known limitation:** export reassigns node GUIDs and drops raw text metadata Figma keeps on
+outlined vectors, so an edited design-system file does not yet round-trip node for node.
+Corpus-wide fidelity and performance acceptance remain open; see [validation](./validation.md)
+and the integration PR for current measurements.
 
 Relevant boundaries:
 

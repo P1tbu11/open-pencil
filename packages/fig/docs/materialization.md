@@ -35,7 +35,13 @@ references, while changing its main component and descendant expansion. Correspo
 removed descendants ends at the swap boundary.
 
 Component-property definitions belong to components/sets. Instances retain assignments and
-references, not copied definition lists.
+references, not copied definition lists. A variant's `variantPropSpecs` name definitions its
+component set owns, so its `componentPropertyValues` resolve to names after the set exists in
+the graph, not during occurrence conversion.
+
+Explicit claims are recorded as instance overrides through the shared field registry; a
+claimed paint that carries a colour alias also records its `boundVariables` claim. An instance
+of a deleted component is materialized as a childless `INSTANCE` with `componentId: null`.
 
 ## Editing responsibilities
 

@@ -26,6 +26,11 @@ undo manager must survive later loads and recovery.
 Page loading is not a user edit: it must neither add undo commands nor clear redo history.
 Failed-load rollback is separate from user undo.
 
+`DocumentAssemblyOptions` extends the interpreter options: the handlers a session is created
+with decide whether records addressing deleted nodes or components fail the load or are skipped
+and reported. Broken hierarchy in the dependency closure is always fatal. Core creates its
+open, recovery, and export sessions with one shared diagnostics sink per document.
+
 ## Transaction semantics
 
 **Implemented:** a scoped synchronous journal restores selected existing nodes, child lists,

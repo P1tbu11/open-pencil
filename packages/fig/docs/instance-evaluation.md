@@ -103,15 +103,22 @@ to describe every saved-record composition.
 
 Changing text or shaping properties invalidates inherited glyph caches unless a patch supplies
 replacement data. Later occurrence-derived glyph data can replace that invalidated cache.
-Paint-only changes do not alter glyph positions. Re-expansion must apply the same validity rule.
+Paint-only changes do not alter glyph positions; every claim application applies the same
+validity rule.
 See [materialization](./materialization.md) for rendering and editing boundaries.
 
 ## Diagnostics
 
-Strict mode rejects missing or ambiguous targets. Explicit diagnostic callbacks can permit
-partial property or assignment evaluation; missing structural swap targets remain fatal.
-Reports retain owner, effective component context, complete path, and assignment payload where
-applicable. Partial evaluation is research support, not successful production acceptance.
+The library is strict by default: a missing or ambiguous target throws. `InterpretInstanceOptions`
+lets a caller skip and report instead: `onUnresolvedProperty` and `onUnresolvedAssignment` for
+records that address nodes the archive no longer contains, and `onMissingComponent` for an
+instance of a deleted component, which then stays a childless instance with its saved
+reference. A swap whose replacement is missing is always fatal. Reports retain owner, effective
+component context, complete path, and assignment payload where applicable.
+
+Figma retains such records after deletions, so the application reader opts into all three
+(`readerSessionOptions` in Core) and exposes the collected records through
+`readerDiagnostics(graph)`. Oracle tooling stays strict unless a flag names the concession.
 
 ## Implementation and tests
 

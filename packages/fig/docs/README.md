@@ -31,9 +31,9 @@ archive -> source model -> instance evaluation -> materialization
 - **Implemented:** behavior present in the linked modules and covered by the cited tests.
 - **Known limitation:** a boundary not yet implemented or validated; not a supported fallback.
 
-The replacement is under construction. Completion requires migrating every consumer and
-**deleting the old reader and repair pipeline**. There will be one reader, not a permanent
-legacy mode or alternative production interpretation path.
+Every consumer uses this reader and the old reader and repair pipeline are deleted; there is
+one interpretation path, not a legacy mode. Remaining work is fidelity and performance
+acceptance against Figma, tracked per document as known limitations.
 
 Keep temporary file keys, benchmark runs, experimental findings, and current blockers in
 ignored `scratch/` notes or the integration PR. Fixture provenance belongs alongside fixtures.

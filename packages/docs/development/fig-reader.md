@@ -5,9 +5,11 @@ occurrences. Its completion criterion is one reader across the application, CLI,
 worker paths, with the superseded importer and repair pipeline removed.
 
 ::: warning Implementation status
-The replacement is under construction. Some session-worker paths use it, but complete entry-point
-migration, structural recovery, corpus-wide strict compatibility, and performance acceptance
-remain unfinished. The diagram describes responsibilities, not a claim of complete support.
+The reader is the only import path: synchronous parsing, the document worker, page population,
+recovery, export, and clipboard paste all use it, and the previous importer is removed.
+Corpus-wide fidelity (export still reassigns node identities and drops some raw text metadata)
+and performance acceptance remain unfinished. The diagram describes responsibilities, not a
+claim of complete Figma parity.
 :::
 
 ```mermaid
