@@ -86,3 +86,33 @@ describe('instance child edits record overrides', () => {
     expect(instanceChild.width).toBe(32)
   })
 })
+
+describe('applied shared styles on instance children', () => {
+  test('a text style applied inside an instance is an override and follows the component otherwise', () => {
+    const api = createAPI()
+    const graph = api.graph
+    const page = graph.getPages()[0]
+    const heading = graph.createNode('TEXT', page.id, {
+      name: 'Heading',
+      sharedStyleType: 'TEXT',
+      text: 'Ag'
+    })
+    const body = graph.createNode('TEXT', page.id, {
+      name: 'Body',
+      sharedStyleType: 'TEXT',
+      text: 'Ag'
+    })
+    const component = graph.createNode('COMPONENT', page.id, { name: 'Card' })
+    const title = graph.createNode('TEXT', component.id, { name: 'title', text: 'Title' })
+    const first = graph.createInstance(component.id, page.id)
+    const second = graph.createInstance(component.id, page.id)
+    const firstTitle = expectDefined(graph.getChildren(first.id)[0], 'first title')
+    api.wrapNode(firstTitle.id).textStyleId = heading.id
+    expect(hasInstanceOverride(graph, firstTitle.id, 'textStyleId')).toBe(true)
+
+    graph.updateNode(title.id, { textStyleId: body.id })
+    graph.syncInstances(component.id)
+    expect(graph.getNode(firstTitle.id)?.textStyleId).toBe(heading.id)
+    expect(graph.getChildren(second.id)[0]?.textStyleId).toBe(body.id)
+  })
+})
