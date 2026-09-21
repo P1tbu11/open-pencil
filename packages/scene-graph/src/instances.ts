@@ -66,7 +66,13 @@ export const INSTANCE_SYNC_PROPS: (keyof SceneNode)[] = [
   'borderBottomWeight',
   'borderLeftWeight',
   'boundVariables',
-  'variableModes'
+  'variableModes',
+  // Applied shared styles follow the component unless an instance overrides them.
+  'fillStyleId',
+  'strokeStyleId',
+  'textStyleId',
+  'effectStyleId',
+  'gridStyleId'
 ]
 
 export const INSTANCE_SYNC_FIELDS = [
@@ -493,6 +499,33 @@ export function populateInstanceChildren(
   cloneChildrenWithMapping(graph, componentId, instanceId, mode)
 }
 
+/**
+ * A nested instance's link to the enclosing component's record is its `componentId` when it
+ * was populated by cloning. A swap replaces that field, so keep the correspondence as the
+ * owner's `sourceComponentId` override and record the swap itself; materialized documents
+ * already carry the correspondence and only gain the swap.
+ */
+function recordNestedSwap(graph: SceneGraph, instance: SceneNode, componentId: string): void {
+  const owner = instance.parentId ? findInstanceAncestor(graph, instance.parentId) : undefined
+  if (!owner) return
+  const existing = getInstanceOverride(
+    owner.instanceOverrides,
+    owner.id,
+    instance.id,
+    'sourceComponentId'
+  )
+  if (typeof existing !== 'string' && instance.componentId)
+    setInstanceOverride(
+      owner.instanceOverrides,
+      owner.id,
+      instance.id,
+      'sourceComponentId',
+      instance.componentId
+    )
+  setInstanceOverride(owner.instanceOverrides, owner.id, instance.id, 'componentId', componentId)
+  graph.updateNode(owner.id, { instanceOverrides: owner.instanceOverrides })
+}
+
 export function swapInstanceComponent(
   graph: SceneGraph,
   instanceId: string,
@@ -503,6 +536,7 @@ export function swapInstanceComponent(
   if (!instance || component?.type !== 'COMPONENT' || instance.type !== 'INSTANCE') return
 
   const previousComponent = instance.componentId ? graph.nodes.get(instance.componentId) : undefined
+  recordNestedSwap(graph, instance, componentId)
   const updates: Partial<SceneNode> = { componentId }
   const source = sourceInTargetCoordinates(component, instance.componentScale)
   for (const key of INSTANCE_SYNC_PROPS) {

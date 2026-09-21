@@ -52,3 +52,54 @@ test('an override inside a nested instance addresses the definition child', asyn
   const reopenedCount = reopened.getChildren(reopened.getChildren(reopenedInstance.id)[0].id)[0]
   expect(reopenedCount?.text).toBe('42')
 })
+
+test('a swap of a nested instance is addressed by the nested instance record', async () => {
+  await initCodec()
+  const graph = new SceneGraph()
+  const page = graph.getPages()[0]
+  const dot = graph.createNode('COMPONENT', page.id, { name: 'Dot', width: 16, height: 16 })
+  const star = graph.createNode('COMPONENT', page.id, { name: 'Star', width: 16, height: 16 })
+  const panel = graph.createNode('COMPONENT', page.id, { name: 'Panel', width: 200, height: 80 })
+  const marker = graph.createInstance(dot.id, panel.id)
+  graph.updateNode(marker.id, { name: 'marker' })
+  const instance = graph.createInstance(panel.id, page.id)
+  const nestedMarker = expectDefined(graph.getChildren(instance.id)[0], 'nested marker')
+  graph.swapInstanceComponent(nestedMarker.id, star.id)
+
+  const bytes = await exportFigFile(graph)
+  const { nodeChanges } = parseFigBuffer(bytes.slice().buffer as ArrayBuffer)
+  const exported = expectDefined(
+    nodeChanges.find(
+      (node) => node.type === 'INSTANCE' && node.symbolData?.symbolOverrides?.length
+    ),
+    'exported instance'
+  )
+  const swap = expectDefined(
+    exported.symbolData?.symbolOverrides?.find((override) => override.overriddenSymbolID),
+    'swap claim'
+  )
+  const markerRecord = expectDefined(
+    nodeChanges.find((node) => node.type === 'INSTANCE' && node.name === 'marker'),
+    'marker record'
+  )
+  const starRecord = expectDefined(
+    nodeChanges.find((node) => node.name === 'Star'),
+    'star record'
+  )
+  expect((swap.guidPath?.guids ?? []).map(guidToString)).toEqual([
+    guidToString(expectDefined(markerRecord.guid, 'marker guid'))
+  ])
+  expect(guidToString(expectDefined(swap.overriddenSymbolID, 'replacement'))).toBe(
+    guidToString(expectDefined(starRecord.guid, 'star guid'))
+  )
+
+  const reopened = await parseFigFile(bytes.slice().buffer as ArrayBuffer)
+  const reopenedInstance = expectDefined(
+    [...reopened.getAllNodes()].find(
+      (node) => node.type === 'INSTANCE' && node.parentId === reopened.getPages()[0].id
+    ),
+    'reopened instance'
+  )
+  const reopenedMarker = reopened.getChildren(reopenedInstance.id)[0]
+  expect(reopened.getNode(reopenedMarker?.componentId ?? '')?.name).toBe('Star')
+})
