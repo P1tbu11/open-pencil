@@ -1,4 +1,4 @@
-import type { NodeChange } from '@open-pencil/kiwi/fig/codec'
+import type { NodeChange, Paint } from '@open-pencil/kiwi/fig/codec'
 import { setInstanceOverride, type SceneGraph, type SceneNode } from '@open-pencil/scene-graph'
 import { createDefaultSourceMetadata } from '@open-pencil/scene-graph/node-defaults'
 
@@ -160,6 +160,34 @@ function claimApplies(field: OverrideField, value: unknown, target: SceneNode): 
   return true
 }
 
+/**
+ * A claimed paint carries its colour alias inside the paint, so the binding it declares is
+ * part of the claim too; otherwise a later component sync restores the component's binding.
+ */
+function recordPaintBindingClaims(
+  owner: SceneNode,
+  target: SceneNode,
+  scene: keyof SceneNode,
+  paints: unknown
+): void {
+  if (!Array.isArray(paints)) return
+  let declared = false
+  for (const [index, paint] of paints.entries()) {
+    const alias = (paint as Paint).colorVar?.value?.alias ?? (paint as Paint).colorVariableBinding
+    if (!alias) continue
+    const field = `boundVariables/${scene}/${index}/color`
+    setInstanceOverride(
+      owner.instanceOverrides,
+      owner.id,
+      target.id,
+      field,
+      target.boundVariables[`${scene}/${index}/color`] ?? null
+    )
+    declared = true
+  }
+  if (declared) setInstanceOverride(owner.instanceOverrides, owner.id, target.id, 'boundVariables')
+}
+
 function recordPropertyClaims(nodes: ReadonlyMap<InstanceOccurrence, SceneNode>): void {
   for (const [ownerOccurrence, owner] of nodes) {
     if (owner.type !== 'INSTANCE') continue
@@ -181,6 +209,8 @@ function recordPropertyClaims(nodes: ReadonlyMap<InstanceOccurrence, SceneNode>)
             structuredClone(value)
           )
         }
+        if (field.kind === 'paint')
+          recordPaintBindingClaims(owner, target, field.scene[0], claim.properties[raw])
       }
       recordVariableBindingClaims(owner, target, claim.properties as NodeChange)
     }

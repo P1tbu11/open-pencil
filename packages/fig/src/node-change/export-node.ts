@@ -136,6 +136,25 @@ function applyColorVariableBinding(
   }
 }
 
+/** A node's fills with their colour variable aliases, for the record and for override claims alike. */
+function createFillPaints(context: SceneNodeToKiwiContext, node: SceneNode): Paint[] {
+  return node.fills.map((fill, index) =>
+    applyColorVariableBinding(context, node, context.fillToKiwiPaint(fill), `fills/${index}/color`)
+  )
+}
+
+function paintBindingOverride(
+  context: SceneNodeToKiwiContext,
+  target: SceneNode,
+  bindingField: string
+): Partial<Pick<KiwiSymbolOverridePayload, 'fillPaints' | 'strokePaints'>> | undefined {
+  if (/^fills\/\d+\/color$/.test(bindingField))
+    return { fillPaints: createFillPaints(context, target) }
+  if (/^strokes\/\d+\/color$/.test(bindingField))
+    return { strokePaints: createStrokePaints(context, target) }
+  return undefined
+}
+
 function createStrokePaints(context: SceneNodeToKiwiContext, node: SceneNode): Paint[] {
   return node.strokes.map((stroke, index) =>
     applyColorVariableBinding(
@@ -509,6 +528,27 @@ function instanceGuidResolver(context: SceneNodeToKiwiContext, counter: { value:
   }
 }
 
+/** A binding override is a paint claim for paint colours and a consumption entry otherwise. */
+function bindingOverrideClaim(
+  context: SceneNodeToKiwiContext,
+  instance: SceneNode,
+  target: SceneNode,
+  field: string
+): Omit<KiwiSymbolOverridePayload, 'guidPath'> | undefined {
+  const bindingField = field.slice('boundVariables/'.length)
+  // Paint colour aliases live inside the paint, so the claim is the paint list itself.
+  const paints = paintBindingOverride(context, target, bindingField)
+  if (paints) return paints
+  const entry = overrideVariableBindingEntry(
+    bindingField,
+    target,
+    instance,
+    context.graph,
+    context.varIdToGuid
+  )
+  return entry ? { parameterConsumptionMap: { entries: [entry] } } : undefined
+}
+
 function serializeRuntimePropertyOverrides(
   context: SceneNodeToKiwiContext,
   instance: SceneNode,
@@ -536,16 +576,8 @@ function serializeRuntimePropertyOverrides(
       if (!resolved) return
       const { target, path } = resolved
       if (field.startsWith('boundVariables/')) {
-        const bindingField = field.slice('boundVariables/'.length)
-        const entry = overrideVariableBindingEntry(
-          bindingField,
-          target,
-          instance,
-          context.graph,
-          context.varIdToGuid
-        )
-        if (entry)
-          result.push({ guidPath: { guids: path }, parameterConsumptionMap: { entries: [entry] } })
+        const claim = bindingOverrideClaim(context, instance, target, field)
+        if (claim) result.push({ guidPath: { guids: path }, ...claim })
         return
       }
       if ((SCALAR_OVERRIDE_FIELDS as readonly string[]).includes(field)) {
@@ -556,7 +588,7 @@ function serializeRuntimePropertyOverrides(
         result.push({
           guidPath: { guids: path },
           ...(field === 'fills'
-            ? { fillPaints: target.fills.map((fill) => context.fillToKiwiPaint(fill)) }
+            ? { fillPaints: createFillPaints(context, target) }
             : { strokePaints: createStrokePaints(context, target) })
         })
         return
@@ -1109,16 +1141,7 @@ function applyNodeVisualProps(
     nc.borderLeftWeight = node.borderLeftWeight
   }
 
-  if (node.fills.length > 0) {
-    nc.fillPaints = node.fills.map((fill, index) =>
-      applyColorVariableBinding(
-        context,
-        node,
-        context.fillToKiwiPaint(fill),
-        `fills/${index}/color`
-      )
-    )
-  }
+  if (node.fills.length > 0) nc.fillPaints = createFillPaints(context, node)
 
   context.serializeCornerRadii(node, nc)
 
