@@ -1,5 +1,10 @@
 import type { GUID } from '@open-pencil/kiwi/fig/codec'
-import { getInstanceOverride, type SceneGraph, type SceneNode } from '@open-pencil/scene-graph'
+import {
+  findInstanceAncestor,
+  getInstanceOverride,
+  type SceneGraph,
+  type SceneNode
+} from '@open-pencil/scene-graph'
 
 import type { DerivedSymbolOverride } from '../instance-overrides/types'
 
@@ -25,13 +30,7 @@ export function instanceExportAddress(
   const path: GUID[] = []
   let scope = owner
   for (const node of [...boundaries, target]) {
-    const mapped = getInstanceOverride(
-      scope.instanceOverrides,
-      scope.id,
-      node.id,
-      'sourceComponentId'
-    )
-    const sourceId = typeof mapped === 'string' ? mapped : node.componentId
+    const sourceId = definitionSource(graph, sourceOf(scope, node))
     if (!sourceId) return undefined
     const guid = resolveGuid(sourceId)
     if (!guid) return undefined
@@ -39,6 +38,35 @@ export function instanceExportAddress(
     scope = node
   }
   return path
+}
+
+function sourceOf(scope: SceneNode, node: SceneNode): string | null {
+  const mapped = getInstanceOverride(
+    scope.instanceOverrides,
+    scope.id,
+    node.id,
+    'sourceComponentId'
+  )
+  return typeof mapped === 'string' ? mapped : node.componentId
+}
+
+/**
+ * Only definition-level nodes are written as records, so a path segment must name one.
+ * A source that itself sits inside an instance (a nested instance's child as seen from the
+ * enclosing component) resolves through its own correspondence until it leaves every instance.
+ */
+function definitionSource(graph: SceneGraph, id: string | null): string | undefined {
+  const seen = new Set<string>()
+  let current = id ? graph.getNode(id) : undefined
+  while (current) {
+    const owner = current.parentId ? findInstanceAncestor(graph, current.parentId) : undefined
+    if (!owner) return current.id
+    if (seen.has(current.id)) return undefined
+    seen.add(current.id)
+    const next = sourceOf(owner, current)
+    current = next ? graph.getNode(next) : undefined
+  }
+  return undefined
 }
 
 /** Derived geometry is a snapshot, not an authored size or position claim. */
