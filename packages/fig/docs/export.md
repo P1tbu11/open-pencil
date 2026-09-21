@@ -98,6 +98,8 @@ selected passing properties as complete editable-document compatibility.
 ## Implementation and tests
 
 - [Node-change serialization](../src/node-change/export-node.ts)
+- [Override claims](../src/node-change/override-claims.ts)
+- [Export context and identity allocation](../src/node-change/export-context.ts)
 - [Property/layout conversion](../src/node-change/serialize.ts)
 - [Archive assembly](../src/archive.ts)
 - [Core export orchestration](../../core/src/io/formats/fig/export.ts)

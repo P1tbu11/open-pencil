@@ -1,4 +1,4 @@
-import type { NodeChange, Paint } from '@open-pencil/kiwi/fig/codec'
+import type { NodeChange } from '@open-pencil/kiwi/fig/codec'
 import { stringToGuid } from '@open-pencil/kiwi/fig/guid'
 import type {
   ComponentPropertyDefinition,
@@ -6,20 +6,29 @@ import type {
   SceneGraph,
   SceneNode
 } from '@open-pencil/scene-graph'
-import { DEFAULT_STROKE_MITER_LIMIT, forEachInstanceOverride } from '@open-pencil/scene-graph'
-import type { Color, GUID, Matrix, Vector } from '@open-pencil/scene-graph/primitives'
+import { DEFAULT_STROKE_MITER_LIMIT } from '@open-pencil/scene-graph'
+import type { GUID, Matrix, Vector } from '@open-pencil/scene-graph/primitives'
 
-import {
-  LAYOUT_DISTANCE_FIELDS,
-  SCALAR_OVERRIDE_FIELDS,
-  SCENE_OVERRIDE_FIELDS
-} from '../instance-overrides/fields'
 import type { DerivedSymbolOverride } from '../instance-overrides/types'
 import { effectiveFigmaRawNodeFields, effectiveFigmaSourcePayload } from '../source-metadata'
 /* eslint-disable max-lines */
 import { bytesToHex } from './bytes'
 import { exportCanvasGuides } from './canvas-guides'
-import { instanceExportAddress, snapshotInstanceGeometry } from './instance-geometry'
+import {
+  applyColorVariableBinding,
+  createFillPaints,
+  createStrokePaints,
+  getOrCreateNodeGuid,
+  instanceGuidResolver,
+  getOrCreatePropertyGuid,
+  parseGuidOrNull,
+  resolveInstanceComponentId,
+  type KiwiNodeChange,
+  type KiwiSymbolOverridePayload,
+  type SceneNodeToKiwiContext
+} from './export-context'
+import { snapshotInstanceGeometry } from './instance-geometry'
+import { mergeOverrides, serializeRuntimePropertyOverrides } from './override-claims'
 import {
   applyExportSettingsPluginData,
   applyLibrarySourcePluginData,
@@ -29,18 +38,10 @@ import {
   serializePluginRelaunchData,
   upsertPluginData
 } from './plugin-data'
-import { overrideVariableBindingEntry, mergeVariableConsumptionMaps } from './variable-bindings'
 
-export type KiwiNodeChange = NodeChange & Record<string, unknown>
+export type { KiwiNodeChange, SceneNodeToKiwiContext } from './export-context'
 
 type KiwiBooleanOperation = NonNullable<NodeChange['booleanOperation']>
-
-interface KiwiSymbolOverridePayload {
-  guidPath?: { guids?: GUID[] }
-  textData?: { characters?: string }
-  fillPaints?: Paint[]
-  [key: string]: unknown
-}
 
 function toKiwiBooleanOperation(operation: SceneNode['booleanOperation']): KiwiBooleanOperation {
   return operation === 'EXCLUDE' ? 'XOR' : (operation ?? 'UNION')
@@ -59,117 +60,6 @@ export function buildAssetRefToVarGuidMap(
     if (variable.version) map.set(`${variable.key}@${variable.version}`, guid)
   }
   return map
-}
-
-interface SceneNodeToKiwiContext {
-  styleReferences?: ReadonlyMap<
-    string,
-    { guid?: GUID; assetRef?: { key: string; version?: string } }
-  >
-  graph: SceneGraph
-  blobs: Uint8Array[]
-  blobIndexByHex?: Map<string, number>
-  nodeIdToGuid?: Map<string, GUID>
-  /** Reverse index of assigned GUID values ("sessionID:localID") for O(1)
-   *  collision detection. Populated alongside every nodeIdToGuid.set() call. */
-  assignedGuidValues?: Set<string>
-  fontDigestMap?: Map<string, Uint8Array>
-  glyphBlobMap?: Map<string, number>
-  varIdToGuid?: Map<string, GUID>
-  modeIdToGuid?: Map<string, GUID>
-  /** Variable GUIDs used only where raw effect aliases cannot retain asset refs. */
-  assetRefToVarGuid?: Map<string, GUID>
-  /** GUIDs minted for component property IDs (e.g. "prop:abc123") that aren't
-   *  already Figma-GUID-shaped, keyed by the original ID so refs/assignments/
-   *  variantPropSpecs pointing at the same property reuse the same GUID. */
-  propertyIdToGuid: Map<string, GUID>
-  componentPropertyDefinitionsById: ReadonlyMap<string, ComponentPropertyDefinition>
-  fractionalPosition: (index: number) => string
-  mapToFigmaType: (type: SceneNode['type']) => string
-  fillToKiwiPaint: (fill: SceneNode['fills'][number]) => Paint
-  safeColor: (color: Color) => Color
-  computeExportTransform: (node: SceneNode) => Matrix
-  serializeCornerRadii: (node: SceneNode, nc: KiwiNodeChange) => void
-  serializeTextProps: (
-    node: SceneNode,
-    nc: KiwiNodeChange,
-    graph: SceneGraph,
-    fontDigestMap: Map<string, Uint8Array> | undefined,
-    blobs: Uint8Array[],
-    glyphBlobMap: Map<string, number> | undefined
-  ) => void
-  serializeLayoutProps: (node: SceneNode, nc: KiwiNodeChange) => void
-  serializeGeometry: (node: SceneNode, nc: KiwiNodeChange, blobs: Uint8Array[]) => void
-  serializeVariableBindings: (
-    node: SceneNode,
-    nc: KiwiNodeChange,
-    graph: SceneGraph,
-    varIdToGuid?: Map<string, GUID>
-  ) => void
-  sceneNodeToKiwi: (
-    node: SceneNode,
-    parentGuid: GUID,
-    childIndex: number,
-    localIdCounter: { value: number },
-    context: SceneNodeToKiwiContext
-  ) => KiwiNodeChange[]
-}
-
-function applyColorVariableBinding(
-  context: SceneNodeToKiwiContext,
-  node: SceneNode,
-  paint: Paint,
-  field: string
-): Paint {
-  const variableId = node.boundVariables[field]
-  if (!variableId) return paint
-  return {
-    ...paint,
-    colorVar: {
-      dataType: 'ALIAS',
-      resolvedDataType: 'COLOR',
-      value: { alias: { guid: context.varIdToGuid?.get(variableId) ?? stringToGuid(variableId) } }
-    },
-    colorVariableBinding: {
-      variableID: context.varIdToGuid?.get(variableId) ?? stringToGuid(variableId)
-    }
-  }
-}
-
-/** A node's fills with their colour variable aliases, for the record and for override claims alike. */
-function createFillPaints(context: SceneNodeToKiwiContext, node: SceneNode): Paint[] {
-  return node.fills.map((fill, index) =>
-    applyColorVariableBinding(context, node, context.fillToKiwiPaint(fill), `fills/${index}/color`)
-  )
-}
-
-function paintBindingOverride(
-  context: SceneNodeToKiwiContext,
-  target: SceneNode,
-  bindingField: string
-): Partial<Pick<KiwiSymbolOverridePayload, 'fillPaints' | 'strokePaints'>> | undefined {
-  if (/^fills\/\d+\/color$/.test(bindingField))
-    return { fillPaints: createFillPaints(context, target) }
-  if (/^strokes\/\d+\/color$/.test(bindingField))
-    return { strokePaints: createStrokePaints(context, target) }
-  return undefined
-}
-
-function createStrokePaints(context: SceneNodeToKiwiContext, node: SceneNode): Paint[] {
-  return node.strokes.map((stroke, index) =>
-    applyColorVariableBinding(
-      context,
-      node,
-      {
-        type: 'SOLID',
-        color: context.safeColor(stroke.color),
-        opacity: stroke.opacity,
-        visible: stroke.visible,
-        blendMode: 'NORMAL'
-      },
-      `strokes/${index}/color`
-    )
-  )
 }
 
 function componentPropertyTypeForKiwi(type: string) {
@@ -215,10 +105,6 @@ function componentPropertyVariableValue(
     }
   }
   return { value: { textValue: value }, dataType: 'STRING', resolvedDataType: 'STRING' }
-}
-
-function parseGuidOrNull(value: string) {
-  return /^\d+:\d+$/.test(value) ? stringToGuid(value) : null
 }
 
 function serializeVariableModes(
@@ -379,286 +265,6 @@ function materializeFigmaPayload(
     )
   }
   return materialized
-}
-
-function resolveInstanceComponentId(context: SceneNodeToKiwiContext, componentId: string): string {
-  const seen = new Set<string>()
-  let currentId = componentId
-  while (!seen.has(currentId)) {
-    seen.add(currentId)
-    const node = context.graph.getNode(currentId)
-    if (node?.type !== 'INSTANCE' || !node.componentId) return currentId
-    currentId = node.componentId
-  }
-  return componentId
-}
-
-function getOrCreateNodeGuid(
-  context: SceneNodeToKiwiContext,
-  nodeId: string,
-  localIdCounter: { value: number }
-): GUID | undefined {
-  const node = context.graph.getNode(nodeId)
-  if (!node) return undefined
-  const existing = context.nodeIdToGuid?.get(nodeId)
-  if (existing) return existing
-  const importedGuid = node.source.id ? parseGuidOrNull(node.source.id) : null
-
-  // When source.id maps to a GUID value that is already assigned to a
-  // different node (e.g. two nodes from different canvases with the same
-  // source.id "1:94"), fall back to the counter to avoid collisions.
-  if (importedGuid && context.assignedGuidValues) {
-    const key = `${importedGuid.sessionID}:${importedGuid.localID}`
-    if (context.assignedGuidValues.has(key)) {
-      const guid: GUID = { sessionID: 1, localID: localIdCounter.value++ }
-      context.nodeIdToGuid?.set(nodeId, guid)
-      context.assignedGuidValues.add(`${guid.sessionID}:${guid.localID}`)
-      return guid
-    }
-  }
-
-  const guid = importedGuid ?? { sessionID: 1, localID: localIdCounter.value++ }
-  context.nodeIdToGuid?.set(nodeId, guid)
-  context.assignedGuidValues?.add(`${guid.sessionID}:${guid.localID}`)
-  return guid
-}
-
-/**
- * Component property IDs ("prop:abc123") never match the Figma GUID shape,
- * so parseGuidOrNull always rejects them — mint a stable synthetic GUID from
- * the shared node-id counter instead, memoized so every def/ref/assignment/
- * variantPropSpec pointing at the same property ID round-trips consistently.
- */
-function getOrCreatePropertyGuid(
-  context: SceneNodeToKiwiContext,
-  propertyId: string,
-  localIdCounter: { value: number }
-): GUID {
-  const existing = context.propertyIdToGuid.get(propertyId)
-  if (existing) return existing
-  const parsed = parseGuidOrNull(propertyId)
-  if (parsed) return parsed
-  const guid = { sessionID: 1, localID: localIdCounter.value++ }
-  context.propertyIdToGuid.set(propertyId, guid)
-  context.assignedGuidValues?.add(`${guid.sessionID}:${guid.localID}`)
-  return guid
-}
-
-function isDescendantOf(context: SceneNodeToKiwiContext, nodeId: string, ancestorId: string) {
-  let current = context.graph.getNode(nodeId)
-  while (current?.parentId) {
-    if (current.parentId === ancestorId) return true
-    current = context.graph.getNode(current.parentId)
-  }
-  return false
-}
-
-function exportedTextStyleReference(context: SceneNodeToKiwiContext, id: string) {
-  if (!context.styleReferences) {
-    const references = new Map<
-      string,
-      { guid?: GUID; assetRef?: { key: string; version?: string } }
-    >()
-    for (const node of context.graph.getAllNodes()) {
-      if (node.sharedStyleType !== 'TEXT' || !node.source.id) continue
-      const raw = effectiveFigmaRawNodeFields(node)
-      if (typeof raw.key !== 'string') continue
-      const assetRef = {
-        key: raw.key,
-        ...(typeof raw.version === 'string' ? { version: raw.version } : {})
-      }
-      references.set(node.source.id, { assetRef })
-    }
-    context.styleReferences = references
-  }
-  const mapped = context.nodeIdToGuid?.get(id)
-  if (mapped) return { guid: mapped }
-  return context.styleReferences.get(id) ?? { guid: stringToGuid(id) }
-}
-
-function unscaledRootSize(instance: SceneNode, target: SceneNode): Vector {
-  const scale = instance.componentScale
-  if (!Number.isFinite(scale) || scale <= 0) throw new Error('Invalid instance uniform scale')
-  return { x: target.width / scale, y: target.height / scale }
-}
-
-function paddingOverride(
-  field: string,
-  value: unknown,
-  instance: SceneNode
-): Record<string, number | string> | undefined {
-  if (field === 'textAutoResize' && typeof value === 'string') return { textAutoResize: value }
-  if (
-    (field === 'primaryAxisSizing' || field === 'counterAxisSizing') &&
-    typeof value === 'string'
-  ) {
-    const key = field === 'primaryAxisSizing' ? 'stackPrimarySizing' : 'stackCounterSizing'
-    return { [key]: value === 'HUG' ? 'RESIZE_TO_FIT_WITH_IMPLICIT_SIZE' : 'FIXED' }
-  }
-  if (field === 'layoutAlignSelf' && typeof value === 'string')
-    return { stackChildAlignSelf: value }
-  if (field === 'layoutGrow' && typeof value === 'number') return { stackChildPrimaryGrow: value }
-  const rawField = Object.hasOwn(LAYOUT_DISTANCE_FIELDS, field)
-    ? LAYOUT_DISTANCE_FIELDS[field]
-    : undefined
-  if (!rawField || typeof value !== 'number') return undefined
-  const scale = instance.componentScale
-  if (!Number.isFinite(scale) || scale <= 0) throw new Error('Invalid instance uniform scale')
-  return { [rawField]: value / scale }
-}
-
-function exportedSwapOverride(
-  context: SceneNodeToKiwiContext,
-  target: SceneNode,
-  path: GUID[] | undefined,
-  counter: { value: number }
-): KiwiSymbolOverridePayload | undefined {
-  if (!path || target.type !== 'INSTANCE' || !target.componentId) return undefined
-  const component = getOrCreateNodeGuid(context, target.componentId, counter)
-  return component ? { guidPath: { guids: path }, overriddenSymbolID: component } : undefined
-}
-
-function instanceGuidResolver(context: SceneNodeToKiwiContext, counter: { value: number }) {
-  return (id: string): GUID | undefined => {
-    const source = context.graph.getNode(id)
-    return (
-      (source?.overrideKey ? parseGuidOrNull(source.overrideKey) : null) ??
-      getOrCreateNodeGuid(context, id, counter)
-    )
-  }
-}
-
-/** A binding override is a paint claim for paint colours and a consumption entry otherwise. */
-function bindingOverrideClaim(
-  context: SceneNodeToKiwiContext,
-  instance: SceneNode,
-  target: SceneNode,
-  field: string
-): Omit<KiwiSymbolOverridePayload, 'guidPath'> | undefined {
-  const bindingField = field.slice('boundVariables/'.length)
-  // Paint colour aliases live inside the paint, so the claim is the paint list itself.
-  const paints = paintBindingOverride(context, target, bindingField)
-  if (paints) return paints
-  const entry = overrideVariableBindingEntry(
-    bindingField,
-    target,
-    instance,
-    context.graph,
-    context.varIdToGuid
-  )
-  return entry ? { parameterConsumptionMap: { entries: [entry] } } : undefined
-}
-
-function serializeRuntimePropertyOverrides(
-  context: SceneNodeToKiwiContext,
-  instance: SceneNode,
-  localIdCounter: { value: number }
-): KiwiSymbolOverridePayload[] {
-  const result: KiwiSymbolOverridePayload[] = []
-  const resolveGuid = instanceGuidResolver(context, localIdCounter)
-  const resolveTarget = (owner: SceneNode, nodeId: string) => {
-    const targetId = nodeId || owner.id
-    const target = context.graph.getNode(targetId)
-    if (!target || (target.id !== instance.id && !isDescendantOf(context, targetId, instance.id)))
-      return undefined
-    const path = instanceExportAddress(context.graph, instance, target, resolveGuid)
-    return path ? { target, path } : undefined
-  }
-  const collect = (owner: SceneNode): void => {
-    forEachInstanceOverride(owner.instanceOverrides, (nodeId, field, value) => {
-      if (
-        field !== 'componentId' &&
-        !SCENE_OVERRIDE_FIELDS.has(field as keyof SceneNode) &&
-        !field.startsWith('boundVariables/')
-      )
-        return
-      const resolved = resolveTarget(owner, nodeId)
-      if (!resolved) return
-      const { target, path } = resolved
-      if (field.startsWith('boundVariables/')) {
-        const claim = bindingOverrideClaim(context, instance, target, field)
-        if (claim) result.push({ guidPath: { guids: path }, ...claim })
-        return
-      }
-      if ((SCALAR_OVERRIDE_FIELDS as readonly string[]).includes(field)) {
-        result.push({ guidPath: { guids: path }, [field]: target[field as keyof SceneNode] })
-        return
-      }
-      if (field === 'fills' || field === 'strokes') {
-        result.push({
-          guidPath: { guids: path },
-          ...(field === 'fills'
-            ? { fillPaints: createFillPaints(context, target) }
-            : { strokePaints: createStrokePaints(context, target) })
-        })
-        return
-      }
-      const padding = paddingOverride(field, target[field as keyof SceneNode], instance)
-      if (padding) {
-        result.push({ guidPath: { guids: path }, ...padding })
-        return
-      }
-      if (field === 'textStyleId' && target.textStyleId) {
-        result.push({
-          guidPath: { guids: path },
-          styleIdForText: exportedTextStyleReference(context, target.textStyleId)
-        })
-        return
-      }
-      if (field === 'width' || field === 'height') {
-        result.push({ guidPath: { guids: path }, size: unscaledRootSize(instance, target) })
-        return
-      }
-      if (field === 'componentId') {
-        const swap = exportedSwapOverride(context, target, path, localIdCounter)
-        if (swap) result.push(swap)
-        return
-      }
-      result.push({
-        guidPath: { guids: path },
-        ...(field === 'text'
-          ? { textData: { characters: typeof value === 'string' ? value : target.text } }
-          : { visible: target.visible })
-      })
-    })
-  }
-  const visit = (node: SceneNode): void => {
-    if (node.type === 'INSTANCE') collect(node)
-    for (const child of context.graph.getChildren(node.id)) visit(child)
-  }
-  visit(instance)
-  return result
-}
-
-function overridePathKey(payload: KiwiSymbolOverridePayload): string | null {
-  const guids = payload.guidPath?.guids
-  return guids?.length
-    ? guids.map(({ sessionID, localID }) => `${sessionID}:${localID}`).join('/')
-    : null
-}
-
-function mergeOverrides(
-  symbolOverrides: KiwiSymbolOverridePayload[],
-  newOverrides: KiwiSymbolOverridePayload[]
-): void {
-  for (const override of newOverrides) {
-    const pathKey = overridePathKey(override)
-    let existingIndex = -1
-    if (pathKey) {
-      for (let index = symbolOverrides.length - 1; index >= 0; index--) {
-        if (overridePathKey(symbolOverrides[index]) !== pathKey) continue
-        existingIndex = index
-        break
-      }
-    }
-    if (existingIndex < 0) symbolOverrides.push(override)
-    else
-      symbolOverrides[existingIndex] = {
-        ...symbolOverrides[existingIndex],
-        ...override,
-        ...mergeVariableConsumptionMaps(symbolOverrides[existingIndex], override)
-      }
-  }
 }
 
 /**
