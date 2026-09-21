@@ -6,7 +6,7 @@ import { nodeChangeToProps } from '../node-change'
 import { numericVariableBindingScales } from '../node-change/variable-bindings'
 import { OVERRIDE_FIELDS, type OverrideField, type RawOverrideField } from './fields'
 import { resolveOccurrencePath, type InstanceOccurrence } from './interpret'
-import type { SymbolData } from './types'
+import { symbolDataOf } from './types'
 import {
   recordVariableBindingClaims,
   occurrenceAssignmentScales,
@@ -19,8 +19,7 @@ function occurrenceMetadata(
 ) {
   const metadata = createDefaultSourceMetadata()
   metadata.fig.layout = converted.source?.fig.layout ?? null
-  metadata.fig.uniformScaleFactor =
-    (current.properties.symbolData as SymbolData | undefined)?.uniformScaleFactor ?? null
+  metadata.fig.uniformScaleFactor = symbolDataOf(current.properties)?.uniformScaleFactor ?? null
   return metadata
 }
 

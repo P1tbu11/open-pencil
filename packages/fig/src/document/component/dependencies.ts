@@ -1,4 +1,4 @@
-import type { ComponentPropAssignment, SymbolData } from '#fig/instance-overrides/types'
+import { symbolDataOf, type ComponentPropAssignment } from '#fig/instance-overrides/types'
 
 import type { GUID, NodeChange } from '@open-pencil/kiwi/fig/codec'
 import { guidToString } from '@open-pencil/kiwi/fig/guid'
@@ -25,7 +25,7 @@ export function componentDependencies(
     add(value.varValue?.value?.symbolIdValue?.guid)
   }
   const visit = (source: NodeChange): void => {
-    const symbol = source.symbolData as SymbolData | undefined
+    const symbol = symbolDataOf(source)
     add(symbol?.symbolID)
     for (const definition of (source.componentPropDefs as DependencyDefinition[] | undefined) ??
       []) {

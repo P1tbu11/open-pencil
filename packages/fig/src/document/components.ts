@@ -2,6 +2,7 @@ import type { NodeChange } from '@open-pencil/kiwi/fig/codec'
 import { guidToString } from '@open-pencil/kiwi/fig/guid'
 
 import type { InstanceOccurrence } from '../instance-overrides/interpret'
+import { indexRecords, parentIdOf } from '../instance-overrides/source-index'
 
 export interface ComponentConstruction {
   sourceId: string
@@ -16,9 +17,7 @@ export function planComponentConstruction(
   roots: readonly InstanceOccurrence[],
   readComponent: (id: string) => InstanceOccurrence
 ): ComponentConstruction[] {
-  const sources = new Map(
-    changes.flatMap((change) => (change.guid ? [[guidToString(change.guid), change] as const] : []))
-  )
+  const sources = indexRecords(changes)
   const pageComponents = new Map<string, InstanceOccurrence>()
   const indexPageComponents = (node: InstanceOccurrence): void => {
     if (node.mainComponentId !== null) return
@@ -38,7 +37,7 @@ export function planComponentConstruction(
       const source = sources.get(current)
       if (!source) throw new Error(`Missing source ancestor ${current}`)
       if (source.type === 'CANVAS') return current
-      current = source.parentIndex?.guid ? guidToString(source.parentIndex.guid) : undefined
+      current = parentIdOf(source)
     }
     throw new Error(`Component ${id} has no source page`)
   }

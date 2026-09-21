@@ -1,6 +1,6 @@
 import type { NodeChange } from '@open-pencil/kiwi/fig/codec'
-import { guidToString } from '@open-pencil/kiwi/fig/guid'
 
+import { createSourceIndex, idOf, parentIdOf } from '../instance-overrides/source-index'
 import { componentDependencies } from './component/dependencies'
 import { createResourceResolver } from './resource-reference'
 import { styleDependencies } from './style-dependencies'
@@ -34,16 +34,20 @@ function collectAncestors(
   missingIds: Set<string>
 ): void {
   for (const id of contentIds) {
-    let node = sources.get(id)
     const visited = new Set<string>([id])
-    while (node?.parentIndex?.guid) {
-      const parent = guidToString(node.parentIndex.guid)
+    let node = sources.get(id)
+    let parent = node ? parentIdOf(node) : undefined
+    while (parent !== undefined) {
       if (visited.has(parent)) throw new Error(`Cyclic source hierarchy at ${parent}`)
       visited.add(parent)
       if (ancestorIds.has(parent)) break
       ancestorIds.add(parent)
       node = sources.get(parent)
-      if (!node) missingIds.add(parent)
+      if (!node) {
+        missingIds.add(parent)
+        break
+      }
+      parent = parentIdOf(node)
     }
   }
 }
@@ -54,19 +58,7 @@ export function collectSceneDependencies(
   pageIds?: ReadonlySet<string>
 ): SceneDependencyClosure {
   const resolveReference = createResourceResolver(changes)
-  const sources = new Map<string, NodeChange>()
-  const children = new Map<string, string[]>()
-  for (const node of changes) {
-    if (!node.guid) continue
-    const id = guidToString(node.guid)
-    if (sources.has(id)) throw new Error(`Duplicate source node ${id}`)
-    sources.set(id, node)
-    if (!node.parentIndex?.guid) continue
-    const parent = guidToString(node.parentIndex.guid)
-    const siblings = children.get(parent) ?? []
-    siblings.push(id)
-    children.set(parent, siblings)
-  }
+  const { sources, children } = createSourceIndex(changes)
   const availableIds = new Set(sources.keys())
   const contentIds = new Set<string>()
   const ancestorIds = new Set<string>()
@@ -79,9 +71,9 @@ export function collectSceneDependencies(
     .filter(
       (node) =>
         node.type === 'CANVAS' &&
-        (pageIds ? !!node.guid && pageIds.has(guidToString(node.guid)) : node.internalOnly !== true)
+        (pageIds ? pageIds.has(idOf(node) ?? '') : node.internalOnly !== true)
     )
-    .flatMap((node) => (node.guid ? [guidToString(node.guid)] : []))
+    .flatMap((node) => idOf(node) ?? [])
   while (pending.length) {
     const id = pending.pop()
     if (!id || contentIds.has(id)) continue
@@ -97,7 +89,7 @@ export function collectSceneDependencies(
     )
     for (const component of components) componentReferences.add(component)
     pending.push(
-      ...(children.get(id) ?? []),
+      ...(children.get(id) ?? []).flatMap((child) => idOf(child) ?? []),
       ...styleDependencies(node, resolveReference, availableIds),
       ...components
     )

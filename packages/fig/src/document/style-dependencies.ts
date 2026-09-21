@@ -1,7 +1,7 @@
 import type { NodeChange, StyleReference } from '@open-pencil/kiwi/fig/codec'
 import { guidToString } from '@open-pencil/kiwi/fig/guid'
 
-import type { SymbolData } from '../instance-overrides/types'
+import { symbolOverridesOf } from '../instance-overrides/types'
 
 const STYLE_REFERENCE_FIELDS = [
   'styleIdForFill',
@@ -25,8 +25,7 @@ export function styleDependencies(
       const id = reference.guid ? guidToString(reference.guid) : resolve(reference)
       if (id && available.has(id)) result.add(id)
     }
-    for (const override of (source.symbolData as SymbolData | undefined)?.symbolOverrides ?? [])
-      visit(override as NodeChange)
+    for (const override of symbolOverridesOf(source)) visit(override as NodeChange)
   }
   visit(node)
   return result

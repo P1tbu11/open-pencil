@@ -1,6 +1,8 @@
 import type { GUID, NodeChange } from '@open-pencil/kiwi/fig/codec'
 import { guidToString } from '@open-pencil/kiwi/fig/guid'
 
+import { indexRecords, parentIdOf } from '../instance-overrides/source-index'
+
 interface LinkedPropertyDefinition {
   id?: GUID
   parentPropDefId?: GUID
@@ -9,9 +11,7 @@ interface LinkedPropertyDefinition {
 
 /** Resolve definition inheritance only within the source node's ancestry. */
 export function inheritComponentPropertyDefinitions(changes: readonly NodeChange[]): void {
-  const sources = new Map(
-    changes.flatMap((node) => (node.guid ? [[guidToString(node.guid), node] as const] : []))
-  )
+  const sources = indexRecords(changes)
   const pending = new Set<NodeChange>()
   const complete = new Set<NodeChange>()
   const resolve = (node: NodeChange): void => {
@@ -19,18 +19,14 @@ export function inheritComponentPropertyDefinitions(changes: readonly NodeChange
     if (pending.has(node)) throw new Error('Cyclic component-property ancestry')
     pending.add(node)
     const ancestors: NodeChange[] = []
-    let parent = node.parentIndex?.guid
-      ? sources.get(guidToString(node.parentIndex.guid))
-      : undefined
+    let parent = sources.get(parentIdOf(node) ?? '')
     const visited = new Set<NodeChange>([node])
     while (parent) {
       if (visited.has(parent)) throw new Error('Cyclic component-property ancestry')
       visited.add(parent)
       resolve(parent)
       ancestors.push(parent)
-      parent = parent.parentIndex?.guid
-        ? sources.get(guidToString(parent.parentIndex.guid))
-        : undefined
+      parent = sources.get(parentIdOf(parent) ?? '')
     }
     const definitions = node.componentPropDefs as LinkedPropertyDefinition[] | undefined
     if (definitions)

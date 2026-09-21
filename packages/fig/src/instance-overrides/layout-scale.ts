@@ -3,7 +3,7 @@ import type { NodeChange } from '@open-pencil/kiwi/fig/codec'
 import { LAYOUT_DISTANCE_FIELDS } from './fields'
 import type { InstanceOccurrence } from './interpret'
 import { scaleTextLayout } from './text-scale'
-import type { SymbolData } from './types'
+import { uniformScaleOf } from './types'
 
 // Distances only: sizing modes, grow factors, and alignment are dimensionless.
 const LAYOUT_DISTANCES = ['stackPadding', ...Object.values(LAYOUT_DISTANCE_FIELDS)] as const
@@ -60,7 +60,7 @@ function scaleRawVisualProps(props: NodeChange, factor: number): void {
  * and saved derived bounds afterwards. Nested expansions are normalized first.
  */
 export function applyInstanceLayoutScale(root: InstanceOccurrence, source: NodeChange): void {
-  const factor = (source.symbolData as SymbolData | undefined)?.uniformScaleFactor ?? 1
+  const factor = uniformScaleOf(source)
   if (!Number.isFinite(factor) || factor <= 0) throw new Error('Invalid instance uniform scale')
   if (factor === 1) return
   const visit = (node: InstanceOccurrence): void => {

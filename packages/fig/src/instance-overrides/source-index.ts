@@ -7,16 +7,35 @@ export interface SourceIndex {
   readonly children: ReadonlyMap<string, readonly NodeChange[]>
 }
 
+/** A record's archive identity, or undefined for the rare record without a GUID. */
+export function idOf(record: NodeChange): string | undefined {
+  return record.guid ? guidToString(record.guid) : undefined
+}
+
+export function parentIdOf(record: NodeChange): string | undefined {
+  return record.parentIndex?.guid ? guidToString(record.parentIndex.guid) : undefined
+}
+
+/** Records by identity, without the child ordering the full index also builds. */
+export function indexRecords(changes: readonly NodeChange[]): Map<string, NodeChange> {
+  const sources = new Map<string, NodeChange>()
+  for (const change of changes) {
+    const id = idOf(change)
+    if (id !== undefined) sources.set(id, change)
+  }
+  return sources
+}
+
 export function createSourceIndex(changes: readonly NodeChange[]): SourceIndex {
   const sources = new Map<string, NodeChange>()
   const children = new Map<string, NodeChange[]>()
   for (const change of changes) {
-    if (!change.guid) continue
-    const id = guidToString(change.guid)
+    const id = idOf(change)
+    if (id === undefined) continue
     if (sources.has(id)) throw new Error(`Duplicate source node ${id}`)
     sources.set(id, change)
-    if (!change.parentIndex?.guid) continue
-    const parentId = guidToString(change.parentIndex.guid)
+    const parentId = parentIdOf(change)
+    if (parentId === undefined) continue
     const siblings = children.get(parentId)
     if (siblings) siblings.push(change)
     else children.set(parentId, [change])

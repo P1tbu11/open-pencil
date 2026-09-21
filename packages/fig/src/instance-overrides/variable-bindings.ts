@@ -8,7 +8,7 @@ import {
 } from '../node-change/variable-bindings'
 import { linearVariableExpression } from '../node-change/variable-expression'
 import type { InstanceOccurrence } from './interpret'
-import type { SymbolData } from './types'
+import { uniformScaleOf } from './types'
 
 export function occurrenceScale(occurrence: InstanceOccurrence): number {
   return occurrence.layoutScale ?? 1
@@ -46,7 +46,7 @@ export function declareSourceVariableBindingUnits(
   target: InstanceOccurrence,
   source: NodeChange
 ): void {
-  const scale = (source.symbolData as SymbolData | undefined)?.uniformScaleFactor ?? 1
+  const scale = uniformScaleOf(source)
   declareVariableBindingUnits(target, source, scale)
 }
 

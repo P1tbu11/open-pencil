@@ -6,7 +6,8 @@ import {
   createOccurrenceInterpreter,
   type InterpretInstanceOptions
 } from '../instance-overrides/interpret'
-import type { SymbolData } from '../instance-overrides/types'
+import { indexRecords } from '../instance-overrides/source-index'
+import { symbolOverridesOf } from '../instance-overrides/types'
 import { applyStyleRefsToFields } from '../node-change/style-refs'
 import {
   resolveDocumentBindingReferences,
@@ -46,9 +47,7 @@ function createReader(
     ownership
   )
   inheritComponentPropertyDefinitions(changes)
-  const styles = new Map(
-    changes.flatMap((node) => (node.guid ? [[guidToString(node.guid), node] as const] : []))
-  )
+  const styles = indexRecords(changes)
   const assets = new Map<string, string>()
   for (const node of changes)
     if (node.guid && typeof node.key === 'string') {
@@ -58,8 +57,7 @@ function createReader(
     }
   const resolveStyles = (node: NodeChange): void => {
     applyStyleRefsToFields(styles, node, assets)
-    for (const override of (node.symbolData as SymbolData | undefined)?.symbolOverrides ?? [])
-      resolveStyles(override as NodeChange)
+    for (const override of symbolOverridesOf(node)) resolveStyles(override as NodeChange)
   }
   for (const node of changes) resolveStyles(node)
   return createScopedReader(changes, bindingDiagnostics, pageIds)

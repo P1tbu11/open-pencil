@@ -1,7 +1,7 @@
 import type { GUID, NodeChange } from '@open-pencil/kiwi/fig/codec'
 import { stringToGuid } from '@open-pencil/kiwi/fig/guid'
 
-import type { SymbolData, SymbolOverride } from '../instance-overrides/types'
+import { symbolOverridesOf, type SymbolOverride } from '../instance-overrides/types'
 import { variableConsumptionEntries } from '../node-change/variable-bindings'
 import { visitVariableReferences } from '../node-change/variable-expression'
 import { normalizeComponentPropertyRecords } from './property-records'
@@ -19,8 +19,7 @@ function visitChildren(
   path: readonly GUID[],
   visit: (node: NodeChange, path: readonly GUID[]) => void
 ): void {
-  const symbol = node.symbolData as SymbolData | undefined
-  for (const override of symbol?.symbolOverrides ?? []) {
+  for (const override of symbolOverridesOf(node)) {
     visit(override as NodeChange, [...path, ...(override.guidPath?.guids ?? [])])
   }
   for (const derived of (node.derivedSymbolData as SymbolOverride[] | undefined) ?? []) {

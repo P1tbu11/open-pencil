@@ -458,14 +458,12 @@ function interpretRoot(
     )
     const rootLayers = groups
       .filter((group) => group.assignments.length)
-      .map(
-        (group): StructuralLayer => ({
-          owner: { ...owner, rank: group.rank },
-          declaredPath: [],
-          path: [],
-          assignments: group.assignments
-        })
-      )
+      .map((group): StructuralLayer => ({
+        owner: { ...owner, rank: group.rank },
+        declaredPath: [],
+        path: [],
+        assignments: group.assignments
+      }))
     const base = expand(guidToString(effective), [], [...rootLayers, ...crossing], rank + 1)
     return { base, children: base.children }
   }

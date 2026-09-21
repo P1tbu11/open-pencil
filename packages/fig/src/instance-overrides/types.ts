@@ -20,6 +20,19 @@ export interface SymbolData {
   symbolOverrides?: SymbolOverride[]
 }
 
+/** The Kiwi codec types only `symbolID`; the remaining symbol fields are read through here. */
+export function symbolDataOf(record: NodeChange): SymbolData | undefined {
+  return record.symbolData as SymbolData | undefined
+}
+
+export function symbolOverridesOf(record: NodeChange): readonly SymbolOverride[] {
+  return symbolDataOf(record)?.symbolOverrides ?? []
+}
+
+export function uniformScaleOf(record: NodeChange): number {
+  return symbolDataOf(record)?.uniformScaleFactor ?? 1
+}
+
 export interface ComponentPropRef {
   defID?: GUID
   componentPropNodeField: string

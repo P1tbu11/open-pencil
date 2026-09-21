@@ -1,7 +1,7 @@
 import type { GUID, NodeChange } from '@open-pencil/kiwi/fig/codec'
 
 import type { InstanceAssignmentDiagnostic } from './interpret'
-import type { ComponentPropAssignment, SymbolData } from './types'
+import { symbolOverridesOf, type ComponentPropAssignment } from './types'
 
 /** Mutable per-owner frame shared by the layers an owner declares. */
 export interface Owner {
@@ -49,8 +49,7 @@ export function ownLayers(
 ): { structural: StructuralLayer[]; claims: PropertyLayer[] } {
   const structural: StructuralLayer[] = []
   const claims: PropertyLayer[] = []
-  const overrides = (source.symbolData as SymbolData | undefined)?.symbolOverrides ?? []
-  for (const override of overrides) {
+  for (const override of symbolOverridesOf(source)) {
     const { guidPath, overriddenSymbolID: swap, componentPropAssignments, ...props } = override
     const path = guidPath?.guids ?? []
     if (!path.length) continue

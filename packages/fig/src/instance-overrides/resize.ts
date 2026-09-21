@@ -1,7 +1,7 @@
 import type { NodeChange, Vector } from '@open-pencil/kiwi/fig/codec'
 
 import type { InstanceOccurrence } from './interpret'
-import type { SymbolData } from './types'
+import { uniformScaleOf } from './types'
 
 export function applyPlacedConstraints(
   root: InstanceOccurrence,
@@ -9,7 +9,7 @@ export function applyPlacedConstraints(
   source: NodeChange
 ): void {
   if (!base?.properties.size || !source.size) return
-  const scale = (source.symbolData as SymbolData | undefined)?.uniformScaleFactor ?? 1
+  const scale = uniformScaleOf(source)
   resizeFreeformOccurrence(
     root,
     { x: base.properties.size.x * scale, y: base.properties.size.y * scale },
