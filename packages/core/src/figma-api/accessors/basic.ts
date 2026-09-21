@@ -13,6 +13,7 @@ import {
   graph,
   nodeId,
   raw,
+  updateNode,
   type NodeProxyInternals,
   type ProxyThis
 } from '#core/figma-api/accessor-utils'
@@ -67,8 +68,7 @@ export function installBasicNodeProxyAccessors(
         return raw(this, internals).name
       },
       set(this: ProxyThis, value: string) {
-        assertEditable(this, internals)
-        graph(this, internals).updateNode(nodeId(this, internals), { name: value })
+        updateNode(this, internals, { name: value })
       }
     },
     removed: {
@@ -154,8 +154,7 @@ export function installBasicNodeProxyAccessors(
 
   Object.assign(prototype, {
     resize(this: ProxyThis, width: number, height: number): void {
-      assertEditable(this, internals)
-      graph(this, internals).updateNode(nodeId(this, internals), { width, height })
+      updateNode(this, internals, { width, height })
     },
     resizeWithoutConstraints(this: ProxyThis, width: number, height: number): void {
       ;(this as { resize(width: number, height: number): void }).resize(width, height)
