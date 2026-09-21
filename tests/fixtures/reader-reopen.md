@@ -28,5 +28,10 @@ to another variant by its List reopens as that variant; App bar leading icons re
 icon each owner assigned; icon vectors keep their `On Surface Variant` alias. The Button set
 keeps its 50 variants and axis properties.
 
-Import was done by hand through Figma's Import dialog; inspection ran through `figma-use eval`.
-No pixel comparison was made.
+Import was done by hand through Figma's Import dialog; inspection ran through `figma-use eval`
+and then through `tools/visual-oracles … compare/interpreted-document.ts` against each
+imported file (`--file` the exported archive, `--figma-key` the imported file). Property
+differences: synthetic instance 0 of 5 nodes, material3 App bar `Configuration=Small,
+Elevation=Flat` 0 of 25 nodes, gold-preview Input 0 of 89 nodes. The gold-preview Input has
+91 geometry-only differences: its hug layout was snapshotted from OpenPencil's layout
+(356.34 wide) and Figma recomputed it (376.34). No pixel comparison was made.

@@ -60,6 +60,21 @@ This writes source/actual captures, differences, and grouped diagnostics. It che
 properties, not pixels. `--allow-partial-assignments` is diagnostic-only: skipped assignments
 are recorded and cause a nonzero exit. It does not turn partial interpretation into success.
 
+The same command is the reopen check for an export: import the exported archive into Figma
+(the desktop app has no scriptable import; drag the file onto Drafts), pass that archive as
+`--file` and the imported file's key, and the comparison reads Figma's interpretation of the
+export against the reader's. Captures target the active document, so bring the imported
+file's tab to the front first:
+
+```sh
+bun tools/visual-oracles/src/operations/activate-tab.ts --title gold-preview-edited
+```
+
+Property and structural differences are export defects. Geometry differences on hug and fill
+layouts are expected: the reader applies saved derived geometry without a layout pass, while
+Figma recomputes layout with its own text metrics. See `tests/fixtures/reader-reopen.md` for
+a recorded run.
+
 - [Comparison and capture implementation](../../../tools/visual-oracles/src/document/)
 - [Command implementation](../../../tools/visual-oracles/src/operations/compare/interpreted-document.ts)
 - [Direct instance rendering workflow](../../../tools/visual-oracles/INSTANCE-INTERPRETER.md)
