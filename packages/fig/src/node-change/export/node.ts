@@ -1,3 +1,6 @@
+import type { DerivedSymbolOverride } from '#fig/instance-overrides/types'
+import { effectiveFigmaRawNodeFields, effectiveFigmaSourcePayload } from '#fig/source-metadata'
+
 import type { NodeChange } from '@open-pencil/kiwi/fig/codec'
 import { stringToGuid } from '@open-pencil/kiwi/fig/guid'
 import type {
@@ -9,11 +12,19 @@ import type {
 import { DEFAULT_STROKE_MITER_LIMIT } from '@open-pencil/scene-graph'
 import type { GUID, Matrix, Vector } from '@open-pencil/scene-graph/primitives'
 
-import type { DerivedSymbolOverride } from '../instance-overrides/types'
-import { effectiveFigmaRawNodeFields, effectiveFigmaSourcePayload } from '../source-metadata'
 /* eslint-disable max-lines */
-import { bytesToHex } from './bytes'
-import { exportCanvasGuides } from './canvas-guides'
+import { bytesToHex } from '../bytes'
+import { exportCanvasGuides } from '../canvas-guides'
+import { snapshotInstanceGeometry } from '../instance-geometry'
+import {
+  applyExportSettingsPluginData,
+  applyLibrarySourcePluginData,
+  applyTextPathBoxPluginData,
+  mergePluginData,
+  NODE_TYPE_PLUGIN_KEY,
+  serializePluginRelaunchData,
+  upsertPluginData
+} from '../plugin-data'
 import {
   applyColorVariableBinding,
   createFillPaints,
@@ -26,20 +37,10 @@ import {
   type KiwiNodeChange,
   type KiwiSymbolOverridePayload,
   type SceneNodeToKiwiContext
-} from './export-context'
-import { snapshotInstanceGeometry } from './instance-geometry'
+} from './context'
 import { mergeOverrides, serializeRuntimePropertyOverrides } from './override-claims'
-import {
-  applyExportSettingsPluginData,
-  applyLibrarySourcePluginData,
-  applyTextPathBoxPluginData,
-  mergePluginData,
-  NODE_TYPE_PLUGIN_KEY,
-  serializePluginRelaunchData,
-  upsertPluginData
-} from './plugin-data'
 
-export type { KiwiNodeChange, SceneNodeToKiwiContext } from './export-context'
+export type { KiwiNodeChange, SceneNodeToKiwiContext } from './context'
 
 type KiwiBooleanOperation = NonNullable<NodeChange['booleanOperation']>
 

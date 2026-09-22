@@ -1,9 +1,12 @@
+import { SCENE_OVERRIDE_FIELDS } from '#fig/instance-overrides/fields'
+import { effectiveFigmaRawNodeFields } from '#fig/source-metadata'
+
 import { stringToGuid } from '@open-pencil/kiwi/fig/guid'
 import { forEachInstanceOverride, type SceneNode } from '@open-pencil/scene-graph'
 import type { GUID, Vector } from '@open-pencil/scene-graph/primitives'
 
-import { SCENE_OVERRIDE_FIELDS } from '../instance-overrides/fields'
-import { effectiveFigmaRawNodeFields } from '../source-metadata'
+import { instanceExportAddress } from '../instance-geometry'
+import { mergeVariableConsumptionMaps, overrideVariableBindingEntry } from '../variable-bindings'
 import {
   createFillPaints,
   createStrokePaints,
@@ -12,9 +15,7 @@ import {
   isDescendantOf,
   type KiwiSymbolOverridePayload,
   type SceneNodeToKiwiContext
-} from './export-context'
-import { instanceExportAddress } from './instance-geometry'
-import { mergeVariableConsumptionMaps, overrideVariableBindingEntry } from './variable-bindings'
+} from './context'
 
 function exportedTextStyleReference(context: SceneNodeToKiwiContext, id: string) {
   if (!context.styleReferences) {

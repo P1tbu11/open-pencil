@@ -4,7 +4,7 @@ import { effectiveFigmaRawNodeFields } from '../source-metadata'
 import { computeExportTransform, fractionalPosition, mapToFigmaType } from './basics'
 import { bytesToHex } from './bytes'
 import { buildDerivedTextData as buildSharedDerivedTextData } from './derived-text-data'
-import { EMPTY_EXPORT_RUNTIME, type FigNodeChangeExportRuntime } from './export-runtime'
+import { EMPTY_EXPORT_RUNTIME, type FigNodeChangeExportRuntime } from './export/runtime'
 import { applyFontFeaturesToKiwi } from './font/features'
 import { weightToFigmaStyle } from './font/style'
 import { fillToKiwiPaint, safeColor } from './paint'
@@ -42,7 +42,7 @@ import {
   buildComponentPropIndex,
   sceneNodeToKiwiWithContext,
   type KiwiNodeChange
-} from './export-node'
+} from './export/node'
 import { exportTextData, fontVariationToKiwi } from './text-data-export'
 
 function textLines(text: string): NonNullable<NodeChange['textData']>['lines'] {
