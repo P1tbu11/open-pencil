@@ -1,5 +1,5 @@
 {
-  "capturedOn": "2026-09-21",
+  "capturedOn": "2026-09-22",
   "figma": "126.6.12 desktop",
   "syntheticOverrides": {
     "instance": { "name": "Card instance", "width": 320, "paddingLeft": 32, "primaryAxisSizingMode": "FIXED" },
@@ -8,6 +8,14 @@
     "label": { "characters": "Overridden label", "fontSize": 18 },
     "badge": { "fill": [0, 0, 1], "count": "42" },
     "orphan": { "type": "INSTANCE", "mainComponent": null }
+  },
+  "syntheticOverridesB": {
+    "instance": { "name": "Panel" },
+    "box": { "strokeVariable": "Accent", "cornerRadius": 8, "boundVariableKeys": ["cornerRadius", "strokes"] },
+    "title": { "textStyle": "Heading style", "fontSize": 24 },
+    "row": { "size": [200, 32], "claimedSize": [180, 40], "paddingLeft": 16, "itemSpacing": 12, "primaryAxisSizingMode": "FIXED" },
+    "hidden": { "name": "hidden later", "visible": false },
+    "marker": { "mainComponent": "Star", "size": [16, 16], "claimedSize": [24, 24] }
   },
   "goldPreviewEdited": {
     "inputFrame": { "width": 376.34124755859375, "height": 39.3802604675293 },
