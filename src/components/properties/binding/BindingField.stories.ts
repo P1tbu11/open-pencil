@@ -1,127 +1,16 @@
 import type { Meta, StoryObj } from '@storybook/vue3-vite'
 import { expect, userEvent, within } from 'storybook/test'
-import { defineComponent, ref, type PropType } from 'vue'
+import { defineComponent, ref } from 'vue'
 
 import type { Variable } from '@open-pencil/scene-graph'
-import type {
-  BindingProvider,
-  BindingState,
-  BindingTarget,
-  BoundEditPolicy
-} from '@open-pencil/vue'
-import {
-  BindableValueRoot,
-  NumberFieldInput,
-  NumberFieldRoot,
-  NumberFieldValue
-} from '@open-pencil/vue'
+import type { BindingProvider, BindingState, BindingTarget } from '@open-pencil/vue'
 
-import { BindingPill } from '@/components/ui/binding'
-
-import VariableBindingPicker from './VariableBindingPicker.vue'
-
-/** One binding-aware number field: quiet at rest, resolved value while editing. */
-const BindingFieldItem = defineComponent({
-  name: 'BindingFieldItem',
-  components: {
-    BindableValueRoot,
-    BindingPill,
-    NumberFieldInput,
-    NumberFieldRoot,
-    NumberFieldValue,
-    VariableBindingPicker
-  },
-  props: {
-    modelValue: { type: Number, required: true },
-    provider: { type: Object as PropType<BindingProvider<number>>, required: true },
-    targets: { type: Array as PropType<BindingTarget[]>, required: true },
-    label: { type: String, required: true },
-    policy: { type: String as PropType<BoundEditPolicy>, default: 'detach-on-edit' },
-    disabled: { type: Boolean, default: false },
-    derived: { type: Boolean, default: false }
-  },
-  emits: ['update:modelValue'],
-  setup() {
-    function tooltip(variableName: string, resolvedValue: unknown) {
-      return typeof resolvedValue === 'number'
-        ? `${variableName} · ${resolvedValue}px`
-        : variableName
-    }
-
-    // Storybook compiles these templates at runtime, so pointer logic that needs
-    // types lives in setup instead of a template expression.
-    function onPointerDown(
-      event: PointerEvent,
-      editing: boolean,
-      actions: { startScrub: (event: PointerEvent) => void }
-    ) {
-      if (editing) return
-      const target = event.target
-      if (target instanceof Element && target.closest('button')) return
-      actions.startScrub(event)
-    }
-
-    return { onPointerDown, tooltip }
-  },
-  template: `
-    <BindableValueRoot
-      v-slot="binding"
-      :provider="provider"
-      :targets="targets"
-      :value="modelValue"
-      :policy="policy"
-    >
-      <NumberFieldRoot
-        v-slot="{ attrs, editing, actions }"
-        :model-value="modelValue"
-        :aria-label="label"
-        :disabled="disabled"
-        @update:model-value="$emit('update:modelValue', $event)"
-      >
-        <div
-          v-bind="{ ...attrs, ...binding.stateAttrs }"
-          data-story-control
-          class="group/binding flex h-6 min-w-0 items-center rounded border border-transparent bg-panel-field text-xs text-surface outline-none hover:bg-panel-field-hover focus-within:border-panel-focus data-[derived]:text-muted"
-          :data-derived="derived ? '' : undefined"
-          @pointerdown="onPointerDown($event, editing, actions)"
-        >
-          <NumberFieldInput class="min-w-0 flex-1 border-0 bg-transparent px-2 outline-none" />
-          <NumberFieldValue class="flex min-w-0 flex-1 items-center overflow-hidden px-1">
-            <template #default="display">
-              <BindingPill
-                v-if="binding.state === 'bound' && binding.variable"
-                :label="binding.variable.name"
-                :tooltip="tooltip(binding.variable.name, binding.resolvedValue)"
-                :disabled="disabled"
-                :derived="derived"
-              />
-              <span v-else-if="display.isMixed" class="min-w-0 flex-1 truncate px-1 text-muted">
-                Mixed
-              </span>
-              <span v-else class="min-w-0 flex-1 truncate px-1">{{ display.value }}</span>
-            </template>
-          </NumberFieldValue>
-          <VariableBindingPicker
-            trigger-label="Apply variable"
-            search-placeholder="Search variables"
-            empty-label="No variables found"
-            detach-label="Detach variable"
-            create-label="Create number variable"
-            create-name-placeholder="Variable name"
-            create-submit-label="Create"
-            :disabled="disabled"
-            :derived="derived"
-          />
-        </div>
-      </NumberFieldRoot>
-    </BindableValueRoot>
-  `
-})
+import Field from './examples/Field.vue'
 
 /** Every binding state side by side, backed by an in-memory provider. */
 const BindingFieldStates = defineComponent({
   name: 'BindingFieldStates',
-  components: { BindingFieldItem },
+  components: { Field },
   setup() {
     const variables: Variable[] = [
       {
@@ -255,7 +144,7 @@ const BindingFieldStates = defineComponent({
       <div class="grid grid-cols-2 gap-1.5 px-3">
         <label class="space-y-1">
           <span class="text-[11px] text-muted">Unbound</span>
-          <BindingFieldItem
+          <Field
             v-model="values.unbound"
             label="Unbound field"
             :provider="provider"
@@ -264,7 +153,7 @@ const BindingFieldStates = defineComponent({
         </label>
         <label class="space-y-1">
           <span class="text-[11px] text-muted">Detach on edit</span>
-          <BindingFieldItem
+          <Field
             v-model="values.detach"
             label="Detach bound field"
             :provider="provider"
@@ -273,7 +162,7 @@ const BindingFieldStates = defineComponent({
         </label>
         <label class="space-y-1">
           <span class="text-[11px] text-muted">Read only</span>
-          <BindingFieldItem
+          <Field
             v-model="values.readonly"
             label="Readonly bound field"
             :provider="provider"
@@ -283,7 +172,7 @@ const BindingFieldStates = defineComponent({
         </label>
         <label class="space-y-1">
           <span class="text-[11px] text-muted">Edit variable</span>
-          <BindingFieldItem
+          <Field
             v-model="values.editVariable"
             label="Edit variable field"
             :provider="provider"
@@ -293,7 +182,7 @@ const BindingFieldStates = defineComponent({
         </label>
         <label class="space-y-1">
           <span class="text-[11px] text-muted">Mixed</span>
-          <BindingFieldItem
+          <Field
             v-model="values.mixed"
             label="Mixed binding field"
             :provider="provider"
@@ -302,7 +191,7 @@ const BindingFieldStates = defineComponent({
         </label>
         <label class="space-y-1">
           <span class="text-[11px] text-muted">Disabled</span>
-          <BindingFieldItem
+          <Field
             v-model="values.disabled"
             label="Disabled bound field"
             :provider="provider"
@@ -312,7 +201,7 @@ const BindingFieldStates = defineComponent({
         </label>
         <label class="col-span-2 space-y-1">
           <span class="text-[11px] text-muted">Derived by auto layout</span>
-          <BindingFieldItem
+          <Field
             v-model="values.derived"
             label="Derived bound field"
             :provider="provider"
