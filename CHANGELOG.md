@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Show download progress with a percentage and transferred size while installing a desktop update, instead of an indeterminate message that lasted until the restart.
+
 ## 0.15.1 — 2026-09-18
 
 ### Added
