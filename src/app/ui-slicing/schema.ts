@@ -59,6 +59,7 @@ function validBounds(value: {
 }) {
   return (
     value.width * value.height <= 32_000_000 &&
+    value.layers.reduce((area, layer) => area + layer.width * layer.height, 0) <= 64_000_000 &&
     new Set(value.layers.map((layer) => layer.id)).size === value.layers.length &&
     value.layers.every(
       (layer) =>

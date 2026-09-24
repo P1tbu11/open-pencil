@@ -20,9 +20,9 @@ export function importSliceResult(editor: Editor, result: SliceResult, position 
   for (const layer of [...result.layers].sort((a, b) => a.z - b.z)) {
     const color = layer.color ?? '#ffffff'
     const rgb = {
-      r: parseInt(color.slice(1, 3), 16) / 255,
-      g: parseInt(color.slice(3, 5), 16) / 255,
-      b: parseInt(color.slice(5, 7), 16) / 255,
+      r: Number.parseInt(color.slice(1, 3), 16) / 255,
+      g: Number.parseInt(color.slice(3, 5), 16) / 255,
+      b: Number.parseInt(color.slice(5, 7), 16) / 255,
       a: 1
     }
     const props: Partial<SceneNode> = {

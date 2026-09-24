@@ -29,5 +29,5 @@ export interface SliceSource {
   name: string
   width: number
   height: number
-  dataUrl: string
+  dataURL: string
 }

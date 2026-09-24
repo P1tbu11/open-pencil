@@ -19,6 +19,7 @@ import MobileDrawer from '@/components/MobileDrawer.vue'
 import MobileHud from '@/components/MobileHud/MobileHud.vue'
 import PropertiesPanel from '@/components/PropertiesPanel.vue'
 import Toolbar from '@/components/Toolbar/Toolbar.vue'
+import UiSlicingStudio from '@/components/ui-slicing/UiSlicingStudio.vue'
 import IconButton from '@/components/ui/button/IconButton.vue'
 import splitterTheme from '@/theme/splitter'
 
@@ -57,6 +58,7 @@ const horizontalSplitterStyles = tv(splitterTheme)({ direction: 'horizontal' })
       <div class="relative flex min-w-0 flex-1">
         <CanvasSplitRoot />
         <Toolbar />
+        <UiSlicingStudio />
       </div>
     </SplitterPanel>
     <SplitterResizeHandle :class="horizontalSplitterStyles.handle()">
@@ -85,6 +87,7 @@ const horizontalSplitterStyles = tv(splitterTheme)({ direction: 'horizontal' })
       <EditorCanvas />
       <MobileHud />
       <Toolbar />
+      <UiSlicingStudio />
     </div>
     <MobileDrawer />
   </div>
