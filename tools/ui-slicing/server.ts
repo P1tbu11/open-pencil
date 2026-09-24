@@ -1,5 +1,5 @@
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import * as v from 'valibot'
@@ -20,7 +20,11 @@ const sourceSchema = v.object({
 })
 const bodySchema = v.object({ source: sourceSchema, regions: v.optional(v.array(v.unknown()), []) })
 const origins = new Set(['http://127.0.0.1:1420', 'http://localhost:1420'])
-const ocrBinary = join(await resolveWorkspaceRoot(import.meta.dir), 'scratch/ui-slice-ocr')
+const workspaceRoot = await resolveWorkspaceRoot(import.meta.dir)
+const ocrBinary = join(workspaceRoot, 'scratch/ui-slice-ocr')
+const qwenPython = join(workspaceRoot, 'scratch/.venv/bin/python')
+const qwenScript = join(import.meta.dir, 'qwen-layered.py')
+const qwenToken = join(homedir(), '.config/ui-slice-studio/modelscope-token.txt')
 const prompt = await Bun.file(join(import.meta.dir, 'detection-prompt.md')).text()
 async function recognizeText(source: v.InferOutput<typeof sourceSchema>) {
   if (process.platform !== 'darwin' || !(await Bun.file(ocrBinary).exists()))
@@ -39,6 +43,56 @@ async function recognizeText(source: v.InferOutput<typeof sourceSchema>) {
     return { layers: validated.layers }
   } finally {
     if (timeout) clearTimeout(timeout)
+    await rm(directory, { recursive: true, force: true })
+  }
+}
+
+const qwenOutput = v.object({
+  width: v.number(),
+  height: v.number(),
+  layers: v.array(v.object({ name: v.string(), path: v.string() }))
+})
+
+async function splitWithQwen(body: v.InferOutput<typeof bodySchema>, signal: AbortSignal) {
+  if (!(await Bun.file(qwenPython).exists()))
+    throw new Error('分层客户端未安装，请先准备 scratch/.venv 里的 gradio_client 和 pillow')
+  const directory = await mkdtemp(join(tmpdir(), 'ui-slice-qwen-'))
+  try {
+    const imagePath = join(directory, 'source')
+    await Bun.write(imagePath, Buffer.from(body.source.dataURL.split(',')[1] ?? '', 'base64'))
+    const proc = Bun.spawn([qwenPython, qwenScript, imagePath, directory], {
+      stdout: 'pipe',
+      stderr: 'pipe'
+    })
+    const stop = () => proc.kill()
+    signal.addEventListener('abort', stop, { once: true })
+    const [stdout, stderr, code] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited
+    ])
+    signal.removeEventListener('abort', stop)
+    if (signal.aborted) throw new Error('已取消千问分层')
+    if (code !== 0) {
+      const detail = stderr.trim().split('\n').at(-1)
+      throw new Error(detail || '千问分层失败，请稍后重试')
+    }
+    const parsed = v.parse(qwenOutput, JSON.parse(stdout))
+    const layers = await Promise.all(
+      parsed.layers.map(async (layer, index) => ({
+        id: `qwen-${index + 1}`,
+        name: layer.name,
+        kind: 'image' as const,
+        x: 0,
+        y: 0,
+        width: body.source.width,
+        height: body.source.height,
+        z: index,
+        pngBase64: (await readFile(layer.path)).toString('base64')
+      }))
+    )
+    return { layers }
+  } finally {
     await rm(directory, { recursive: true, force: true })
   }
 }
@@ -104,7 +158,7 @@ const server = Bun.serve({
       return json({
         ocr: process.platform === 'darwin',
         detection: Boolean(process.env.VISION_API_URL),
-        splitting: Boolean(process.env.SLICE_WORKER_URL)
+        splitting: Boolean(process.env.SLICE_WORKER_URL) || (await Bun.file(qwenToken).exists())
       })
     if (request.method !== 'POST' || !['/ocr', '/detect', '/split'].includes(path))
       return json({ error: 'Not found' }, 404)
@@ -113,12 +167,15 @@ const server = Bun.serve({
     try {
       const body = v.parse(bodySchema, await request.json())
       parseRegions({ version: 1, ...body.source, layers: body.regions })
-      const signal = AbortSignal.any([request.signal, AbortSignal.timeout(180_000)])
+      const signal = AbortSignal.any([request.signal, AbortSignal.timeout(240_000)])
       if (path === '/ocr') return json(await recognizeText(body.source))
       if (path === '/detect') return json(await detectVision(body, signal))
       const worker = process.env.SLICE_WORKER_URL
-      if (!worker)
-        return json({ error: '尚未配置透明分层与背景补全服务；本地快速拆分可继续使用' }, 503)
+      if (!worker) {
+        if (!(await Bun.file(qwenToken).exists()))
+          return json({ error: '尚未配置透明分层与背景补全服务；本地快速拆分可继续使用' }, 503)
+        return json(await splitWithQwen(body, signal))
+      }
       const response = await fetch(worker.replace(/\/$/, '') + '/split', {
         method: 'POST',
         signal,

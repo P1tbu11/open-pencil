@@ -662,11 +662,7 @@ async function saveSource() {
         <AppButton :disabled="!project?.regions.length" variant="outline" @click="generate(false)"
           >本地快速拆分</AppButton
         >
-        <AppButton
-          :disabled="!project?.regions.length"
-          color="primary"
-          variant="solid"
-          @click="generate(true)"
+        <AppButton :disabled="!project" color="primary" variant="solid" @click="generate(true)"
           >AI 原位拆分</AppButton
         >
       </template>
