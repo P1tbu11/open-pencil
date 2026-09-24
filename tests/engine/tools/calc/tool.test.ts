@@ -39,14 +39,14 @@ describe('calc tool', () => {
     const result = run('["2 + 2", "2 +", "3 * 3"]')
     expect(result.results).toEqual([
       { expr: '2 + 2', result: 4 },
-      { expr: '2 +', error: 'Expression ends after an operator' },
+      { expr: '2 +', error: 'Expected expression after + at character 3' },
       { expr: '3 * 3', result: 9 }
     ])
   })
 
   test('evaluates text that only looks like JSON as an expression', () => {
     expect(run('2 + 2')).toEqual({ expr: '2 + 2', result: 4 })
-    expect((run('{"a": 1}') as { error: string }).error).toContain('Unexpected character')
+    expect((run('{"a": 1}') as { error: string }).error).toContain('Unexpected "{"')
   })
 
   test('advertises exactly the functions it supports', () => {

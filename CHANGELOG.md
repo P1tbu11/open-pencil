@@ -14,7 +14,7 @@
 
 ### Security
 
-- Evaluate `calc` expressions with a parser that never compiles input into JavaScript, replacing the `expr-eval` dependency and its unpatched critical code-execution advisory (GHSA-q9v2-7m5w-4693).
+- Evaluate `calc` expressions through `jsep` and an arithmetic allowlist that never compiles input into JavaScript, replacing the `expr-eval` dependency and its unpatched critical code-execution advisory (GHSA-q9v2-7m5w-4693).
 
 ## 0.15.1 — 2026-09-18
 

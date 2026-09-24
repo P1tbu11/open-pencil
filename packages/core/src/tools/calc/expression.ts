@@ -1,21 +1,14 @@
+import jsep from 'jsep'
+
 /**
  * Arithmetic expression evaluator for the `calc` tool.
  *
- * The grammar is deliberately the one the tool documents and nothing more: no
- * variables, constants, strings, member access, or non-deterministic
- * functions. Expressions arrive from a model, so the evaluator never compiles
- * input into JavaScript and exposes no host object.
- *
- *   expression := additive
- *   additive   := multiplicative (('+' | '-') multiplicative)*
- *   multiplicative := unary (('*' | '/' | '%') unary)*
- *   unary      := ('-' | '+') unary | power
- *   power      := primary ('**' unary)?
- *   primary    := number | '(' expression ')' | function '(' arguments ')'
- *
- * `**` is right-associative and binds tighter than a leading sign, so
- * `-2 ** 2` is `-4` as in Python and ordinary mathematical notation, rather
- * than the syntax error JavaScript raises.
+ * `jsep` parses; this module walks the resulting syntax tree and evaluates
+ * only the arithmetic the tool documents. Expressions arrive from a model, so
+ * nothing is compiled into JavaScript and no host object is reachable: every
+ * node type, operator and function is matched against an allowlist, and
+ * anything else — identifiers, member access, arrays, conditionals, comparison
+ * and logical operators — is rejected with a message naming what was used.
  */
 
 /** Functions the tool documents, with their accepted argument counts. */
@@ -37,7 +30,23 @@ export type CalcFunction = keyof typeof FUNCTIONS
 
 export const CALC_FUNCTIONS = Object.keys(FUNCTIONS) as CalcFunction[]
 
-/** Raised for input the grammar rejects; the message reaches the caller. */
+const BINARY_OPERATORS = new Map<string, (left: number, right: number) => number>([
+  ['+', (left, right) => left + right],
+  ['-', (left, right) => left - right],
+  ['*', (left, right) => left * right],
+  ['/', (left, right) => left / right],
+  ['%', (left, right) => left % right],
+  ['**', (left, right) => left ** right]
+])
+
+const UNARY_OPERATORS = new Map<string, (value: number) => number>([
+  ['-', (value) => -value],
+  ['+', (value) => value]
+])
+
+export const CALC_OPERATORS = [...BINARY_OPERATORS.keys()]
+
+/** Raised for input outside the supported arithmetic; the message reaches the caller. */
 export class CalcSyntaxError extends Error {
   constructor(message: string) {
     super(message)
@@ -45,195 +54,18 @@ export class CalcSyntaxError extends Error {
   }
 }
 
-type TokenType = 'number' | 'identifier' | 'operator' | 'paren' | 'comma'
-
-interface Token {
-  readonly type: TokenType
-  readonly value: string
-  /** Zero-based offset in the source, used to point at the offending text. */
-  readonly start: number
+/** Human-readable name for a node the evaluator refuses, used in error messages. */
+const UNSUPPORTED_NODES: Record<string, string> = {
+  Identifier: 'a name',
+  MemberExpression: 'property access',
+  ArrayExpression: 'an array',
+  Compound: 'more than one expression',
+  ConditionalExpression: 'a conditional',
+  ThisExpression: 'this'
 }
 
-const OPERATORS = ['**', '+', '-', '*', '/', '%'] as const
-
-// Decimal literals with an optional fraction and exponent: 1, 1.5, .5, 1e3.
-const NUMBER_PATTERN = /^(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?/
-const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*/
-
-function tokenize(source: string): Token[] {
-  const tokens: Token[] = []
-  let index = 0
-  while (index < source.length) {
-    const character = source[index]
-    if (/\s/.test(character)) {
-      index += 1
-      continue
-    }
-    if (character === '(' || character === ')') {
-      tokens.push({ type: 'paren', value: character, start: index })
-      index += 1
-      continue
-    }
-    if (character === ',') {
-      tokens.push({ type: 'comma', value: character, start: index })
-      index += 1
-      continue
-    }
-    const rest = source.slice(index)
-    const operator = OPERATORS.find((candidate) => rest.startsWith(candidate))
-    if (operator) {
-      tokens.push({ type: 'operator', value: operator, start: index })
-      index += operator.length
-      continue
-    }
-    const number = NUMBER_PATTERN.exec(rest)?.[0]
-    if (number) {
-      tokens.push({ type: 'number', value: number, start: index })
-      index += number.length
-      continue
-    }
-    const identifier = IDENTIFIER_PATTERN.exec(rest)?.[0]
-    if (identifier) {
-      tokens.push({ type: 'identifier', value: identifier, start: index })
-      index += identifier.length
-      continue
-    }
-    throw new CalcSyntaxError(`Unexpected character '${character}' at position ${index + 1}`)
-  }
-  return tokens
-}
-
-class Parser {
-  private index = 0
-
-  constructor(private readonly tokens: Token[]) {}
-
-  parse(): number {
-    if (this.tokens.length === 0) throw new CalcSyntaxError('Expression is empty')
-    const value = this.additive()
-    const extra = this.peek()
-    if (extra) {
-      throw new CalcSyntaxError(
-        `Unexpected '${extra.value}' at position ${extra.start + 1}; expected end of expression`
-      )
-    }
-    return value
-  }
-
-  private peek(): Token | undefined {
-    return this.tokens[this.index]
-  }
-
-  private consumeOperator(...values: string[]): Token | undefined {
-    const token = this.peek()
-    if (token?.type === 'operator' && values.includes(token.value)) {
-      this.index += 1
-      return token
-    }
-    return undefined
-  }
-
-  private additive(): number {
-    let left = this.multiplicative()
-    let operator = this.consumeOperator('+', '-')
-    while (operator) {
-      const right = this.multiplicative()
-      left = operator.value === '+' ? left + right : left - right
-      operator = this.consumeOperator('+', '-')
-    }
-    return left
-  }
-
-  private multiplicative(): number {
-    let left = this.unary()
-    let operator = this.consumeOperator('*', '/', '%')
-    while (operator) {
-      const right = this.unary()
-      if (operator.value === '*') left = left * right
-      else if (operator.value === '/') left = left / right
-      else left = left % right
-      operator = this.consumeOperator('*', '/', '%')
-    }
-    return left
-  }
-
-  private unary(): number {
-    const sign = this.consumeOperator('-', '+')
-    if (sign) {
-      const value = this.unary()
-      return sign.value === '-' ? -value : value
-    }
-    return this.power()
-  }
-
-  private power(): number {
-    const base = this.primary()
-    // Right-associative, and the right side may carry its own sign.
-    return this.consumeOperator('**') ? base ** this.unary() : base
-  }
-
-  private primary(): number {
-    const token = this.peek()
-    if (!token) throw new CalcSyntaxError('Expression ends after an operator')
-
-    if (token.type === 'number') {
-      this.index += 1
-      return Number(token.value)
-    }
-
-    if (token.type === 'paren' && token.value === '(') {
-      this.index += 1
-      const value = this.additive()
-      this.expectClosingParen()
-      return value
-    }
-
-    if (token.type === 'identifier') {
-      this.index += 1
-      return this.call(token)
-    }
-
-    throw new CalcSyntaxError(`Unexpected '${token.value}' at position ${token.start + 1}`)
-  }
-
-  private call(name: Token): number {
-    if (!(name.value in FUNCTIONS)) {
-      throw new CalcSyntaxError(
-        `Unknown function '${name.value}'; supported: ${CALC_FUNCTIONS.join(', ')}`
-      )
-    }
-    const open = this.peek()
-    if (open?.type !== 'paren' || open.value !== '(') {
-      throw new CalcSyntaxError(`Expected '(' after '${name.value}'`)
-    }
-    this.index += 1
-
-    const args: number[] = [this.additive()]
-    while (this.peek()?.type === 'comma') {
-      this.index += 1
-      args.push(this.additive())
-    }
-    this.expectClosingParen()
-
-    const { arity, apply } = FUNCTIONS[name.value as CalcFunction]
-    const [minimum, maximum] = arity
-    if (args.length < minimum || args.length > maximum) {
-      throw new CalcSyntaxError(
-        `'${name.value}' takes ${describeArity(minimum, maximum)}, received ${args.length}`
-      )
-    }
-    return apply(args)
-  }
-
-  private expectClosingParen(): void {
-    const token = this.peek()
-    if (token?.type !== 'paren' || token.value !== ')') {
-      throw new CalcSyntaxError(
-        token ? `Expected ')' at position ${token.start + 1}` : "Expected ')' before end"
-      )
-    }
-    this.index += 1
-  }
+function describeNode(node: jsep.Expression): string {
+  return UNSUPPORTED_NODES[node.type] ?? `'${node.type}'`
 }
 
 function describeArity(minimum: number, maximum: number): string {
@@ -242,11 +74,71 @@ function describeArity(minimum: number, maximum: number): string {
   return `${minimum} to ${maximum} arguments`
 }
 
+function callFunction(node: jsep.CallExpression): number {
+  const callee = node.callee
+  if (callee.type !== 'Identifier') {
+    throw new CalcSyntaxError(`Cannot call ${describeNode(callee)}`)
+  }
+  const name = (callee as jsep.Identifier).name
+  if (!(name in FUNCTIONS)) {
+    throw new CalcSyntaxError(`Unknown function '${name}'; supported: ${CALC_FUNCTIONS.join(', ')}`)
+  }
+  const args = node.arguments.map(evaluateNode)
+  const { arity, apply } = FUNCTIONS[name as CalcFunction]
+  const [minimum, maximum] = arity
+  if (args.length < minimum || args.length > maximum) {
+    throw new CalcSyntaxError(
+      `'${name}' takes ${describeArity(minimum, maximum)}, received ${args.length}`
+    )
+  }
+  return apply(args)
+}
+
+function evaluateNode(node: jsep.Expression): number {
+  switch (node.type) {
+    case 'Literal': {
+      const { value, raw } = node as jsep.Literal
+      if (typeof value !== 'number') {
+        throw new CalcSyntaxError(`'${raw}' is not a number`)
+      }
+      return value
+    }
+    case 'UnaryExpression': {
+      const { operator, argument } = node as jsep.UnaryExpression
+      const apply = UNARY_OPERATORS.get(operator)
+      if (!apply) throw new CalcSyntaxError(`Unsupported operator '${operator}'`)
+      return apply(evaluateNode(argument))
+    }
+    case 'BinaryExpression': {
+      const { operator, left, right } = node as jsep.BinaryExpression
+      const apply = BINARY_OPERATORS.get(operator)
+      if (!apply) {
+        throw new CalcSyntaxError(
+          `Unsupported operator '${operator}'; supported: ${CALC_OPERATORS.join(' ')}`
+        )
+      }
+      return apply(evaluateNode(left), evaluateNode(right))
+    }
+    case 'CallExpression':
+      return callFunction(node as jsep.CallExpression)
+    default:
+      throw new CalcSyntaxError(`Expression uses ${describeNode(node)}, which calc does not accept`)
+  }
+}
+
 /**
- * Evaluate an arithmetic expression. Throws `CalcSyntaxError` when the input
- * is outside the grammar; a well-formed expression may still return a
- * non-finite number, which the caller reports rather than the evaluator.
+ * Evaluate an arithmetic expression. Throws `CalcSyntaxError` for input the
+ * parser rejects or the allowlist refuses; a well-formed expression may still
+ * return a non-finite number, which the caller reports rather than this module.
  */
 export function evaluateExpression(source: string): number {
-  return new Parser(tokenize(source)).parse()
+  if (source.trim() === '') throw new CalcSyntaxError('Expression is empty')
+  let tree: jsep.Expression
+  try {
+    tree = jsep(source)
+  } catch (error) {
+    // jsep's own messages already name the offending character and position.
+    throw new CalcSyntaxError(error instanceof Error ? error.message : String(error))
+  }
+  return evaluateNode(tree)
 }

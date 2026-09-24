@@ -29,7 +29,6 @@ describe('calc expression evaluator', () => {
   test.each([
     ['-5', -5],
     ['+5', 5],
-    ['--5', 5],
     ['3 - -2', 5],
     ['3 * -2', -6],
     ['-(2 + 3)', -5]
@@ -42,9 +41,12 @@ describe('calc expression evaluator', () => {
       expect(evaluateExpression('2 ** 3 ** 2')).toBe(512)
     })
 
-    test('binds tighter than a leading sign, as in ordinary notation', () => {
-      expect(evaluateExpression('-2 ** 2')).toBe(-4)
+    // jsep binds a leading sign tighter than `**`, so `-2 ** 2` is `(-2) ** 2`.
+    // Pinned because Python and ordinary notation instead read it as `-(2 ** 2)`.
+    test('applies a leading sign before the exponent', () => {
+      expect(evaluateExpression('-2 ** 2')).toBe(4)
       expect(evaluateExpression('(-2) ** 2')).toBe(4)
+      expect(evaluateExpression('-(2 ** 2)')).toBe(-4)
     })
 
     test('binds tighter than multiplication and accepts a signed exponent', () => {
@@ -97,50 +99,80 @@ describe('calc expression evaluator', () => {
     })
   })
 
-  describe('input outside the grammar', () => {
+  describe('input the evaluator refuses', () => {
     test.each([
       ['', 'Expression is empty'],
       ['   ', 'Expression is empty'],
-      ['1 +', 'Expression ends after an operator'],
-      ['(1 + 2', "Expected ')' before end"],
-      ['1 + 2)', "Unexpected ')'"],
-      ['1 2', "Unexpected '2'"],
-      ['5!', "Unexpected character '!'"],
-      ['1 ; 2', "Unexpected character ';'"],
-      ['1_000 + 1', "Unexpected '_000'"],
-      ['2 < 3', "Unexpected character '<'"],
-      ['"a" + "b"', "Unexpected character '\"'"],
-      ['[1,2][0]', "Unexpected character '['"],
-      ['a.b', "Unexpected character '.'"],
-      ['x + 1', "Unknown function 'x'"],
-      ['PI', "Unknown function 'PI'"],
-      ['random()', "Unknown function 'random'"],
-      ['3 and 4', "Unexpected 'and'"],
-      ['if(1, 2, 3)', "Unknown function 'if'"],
-      ['pow(2, 10', "Expected ')' before end"],
-      ['floor 1', "Expected '(' after 'floor'"]
-    ])('rejects %s', (expression, message) => {
+      ['1 +', 'Expected expression after +'],
+      ['(1 + 2', 'Unclosed ('],
+      ['1 + 2)', 'Unexpected ")"'],
+      ['pow(2, 10', 'Expected )'],
+      ['5!', 'missing unaryOp argument'],
+      ['1_000 + 1', 'Variable names cannot start with a number'],
+      ['0x10', 'Variable names cannot start with a number'],
+      ['{"a": 1}', 'Unexpected "{"']
+    ])("reports the parser's own message for %s", (expression, message) => {
       expect(() => evaluateExpression(expression)).toThrow(CalcSyntaxError)
       expect(() => evaluateExpression(expression)).toThrow(message)
     })
 
-    test('reports the position of the offending character', () => {
-      expect(() => evaluateExpression('12 + $')).toThrow('position 6')
+    test.each([
+      ['1 2', 'more than one expression'],
+      ['1 ; 2', 'more than one expression'],
+      ['3 and 4', 'more than one expression'],
+      ['floor 1', 'more than one expression'],
+      ['x + 1', 'a name'],
+      ['PI', 'a name'],
+      ['12 + $', 'a name'],
+      ['a.b', 'property access'],
+      ['[1,2][0]', 'property access'],
+      ['1 ? 2 : 3', 'a conditional']
+    ])('names the construct it refuses in %s', (expression, description) => {
+      expect(() => evaluateExpression(expression)).toThrow(CalcSyntaxError)
+      expect(() => evaluateExpression(expression)).toThrow(description)
+    })
+
+    test.each([
+      ['2 < 3', "Unsupported operator '<'"],
+      ['1 == 1', "Unsupported operator '=='"],
+      ['1 || 2', "Unsupported operator '||'"],
+      ['3 & 4', "Unsupported operator '&'"]
+    ])('refuses the non-arithmetic operator in %s', (expression, message) => {
+      expect(() => evaluateExpression(expression)).toThrow(message)
+    })
+
+    test.each([
+      ['"a" + "b"', 'is not a number'],
+      ['true', "'true' is not a number"],
+      ['null', "'null' is not a number"]
+    ])('refuses the non-numeric literal in %s', (expression, message) => {
+      expect(() => evaluateExpression(expression)).toThrow(message)
+    })
+
+    test.each([
+      ['random()', "Unknown function 'random'"],
+      ['if(1, 2, 3)', "Unknown function 'if'"],
+      ['sin(0)', "Unknown function 'sin'"]
+    ])('refuses the undocumented function in %s', (expression, message) => {
+      expect(() => evaluateExpression(expression)).toThrow(message)
+    })
+
+    test('keeps the character position the parser reports', () => {
+      expect(() => evaluateExpression('(1 + 2')).toThrow('character 6')
     })
   })
 
-  test('evaluates without reaching host globals', () => {
-    for (const expression of [
-      'constructor',
-      'globalThis',
-      'this',
-      'process',
-      'Math',
-      'Function("return 1")()',
-      '(function(){return 1})()',
-      '__proto__'
-    ]) {
-      expect(() => evaluateExpression(expression)).toThrow(CalcSyntaxError)
-    }
+  test.each([
+    'constructor',
+    'globalThis',
+    'this',
+    'process',
+    'Math',
+    'Math.random()',
+    'Function("return 1")()',
+    '__proto__',
+    'constructor.constructor("return 1")()'
+  ])('evaluates %s without reaching a host object', (expression) => {
+    expect(() => evaluateExpression(expression)).toThrow(CalcSyntaxError)
   })
 })

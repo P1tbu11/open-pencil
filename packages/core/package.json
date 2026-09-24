@@ -198,6 +198,7 @@
     "fontoxpath": "^3.34.0",
     "fzstd": "^0.1.1",
     "js-base64": "^3.9.3",
+    "jsep": "^1.4.0",
     "jspdf": "^4.2.1",
     "nanoevents": "^9.1.0",
     "ofetch": "^1.5.1",
