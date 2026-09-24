@@ -76,6 +76,7 @@ const numericFields = [
   { key: 'z', label: '层级' }
 ] as const
 function cancel() {
+  if (!busy.value) return
   controller?.abort()
   status.value = '已取消，已完成的画布不受影响'
 }
