@@ -1,0 +1,9 @@
+{
+  "name": "@open-pencil/ui-slicing-tools",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@open-pencil/package-artifacts": "workspace:*",
+    "valibot": "^1.4.2"
+  }
+}

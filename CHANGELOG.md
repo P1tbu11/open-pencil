@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- UI Slice Studio: annotate game screenshots, recognize text locally on macOS, extract simple flat-background elements and import editable native layers with undo and portable project files.
+- Layered PSD and asset exports, a Godot 4 scene export, and initial Unity/Cocos import adapters. Cloud detection and semantic splitting use configurable services; Unity/Cocos editor acceptance is pending.
+
 ### Breaking changes
 
 - The desktop app now requires macOS 13 or later; the web app supports Chrome 111, Edge 111, Firefox 128, and Safari 16.4 or later.

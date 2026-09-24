@@ -23,7 +23,8 @@
     "tools/package-quality",
     "tools/release-packages",
     "tools/tauri-menu",
-    "tools/visual-oracles"
+    "tools/visual-oracles",
+    "tools/ui-slicing"
   ],
   "type": "module",
   "scripts": {
@@ -81,7 +82,10 @@
     "docs:preview": "bun --filter @open-pencil/docs preview",
     "generate:icons": "bun tools/brand/src/cli.ts generate",
     "check:icons": "bun tools/brand/src/cli.ts check && bun --filter @open-pencil/brand-tools check",
-    "generate:tauri-menu": "bun tools/tauri-menu/src/generate.ts"
+    "generate:tauri-menu": "bun tools/tauri-menu/src/generate.ts",
+    "slice:setup": "mkdir -p scratch && swiftc -O tools/ui-slicing/ocr.swift -o scratch/ui-slice-ocr",
+    "slice:server": "bun tools/ui-slicing/server.ts",
+    "slice:dev": "bun tools/ui-slicing/dev.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.39",
@@ -131,6 +135,7 @@
     "@valibot/to-json-schema": "^1.8.0",
     "@vueuse/core": "^14.4.0",
     "@xmldom/xmldom": "^0.9.11",
+    "ag-psd": "^29",
     "ai": "^7.0.66",
     "aws4fetch": "^1.0.20",
     "canvaskit-wasm": "^0.41.1",

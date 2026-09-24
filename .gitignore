@@ -90,3 +90,6 @@ scratch/
 
 # OpenCode
 .opencode/
+
+# Local UI Slice runtime
+.runtime/
