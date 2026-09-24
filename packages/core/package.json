@@ -194,7 +194,6 @@
     "destr": "^2.0.5",
     "diff": "^8.0.4",
     "es-toolkit": "^1.51.0",
-    "expr-eval": "^2.0.2",
     "fflate": "^0.8.3",
     "fontoxpath": "^3.34.0",
     "fzstd": "^0.1.1",
