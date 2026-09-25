@@ -66,15 +66,52 @@ function preferredRemoteSource(face: FontFaceData): RemoteFontSource | undefined
   )
 }
 
-function resolvedRemoteFaces(result: ResolveFontResult): Array<{
+export function unicodeRangeCoverage(ranges: readonly string[] | undefined, text: string): number {
+  if (!ranges?.length) return new Set(text).size
+  const bounds = ranges.flatMap((range) => {
+    const match = /^U\+([0-9A-F?]+)(?:-([0-9A-F]+))?$/i.exec(range.trim())
+    if (!match) return []
+    const start = Number.parseInt(match[1].replaceAll('?', '0'), 16)
+    const end = match[2]
+      ? Number.parseInt(match[2], 16)
+      : Number.parseInt(match[1].replaceAll('?', 'F'), 16)
+    return [[start, end] as const]
+  })
+  let covered = 0
+  for (const character of new Set(text)) {
+    const code = character.codePointAt(0) ?? 0
+    if (bounds.some(([start, end]) => code >= start && code <= end)) covered++
+  }
+  return covered
+}
+
+function resolvedRemoteFaces(
+  result: ResolveFontResult,
+  characters = ''
+): Array<{
   source: RemoteFontSource
   init?: RequestInit
 }> {
-  const candidates = result.fonts.flatMap((face) => {
+  const candidates = result.fonts.flatMap((face, index) => {
     const source = preferredRemoteSource(face)
-    return source ? [{ source, init: face.meta?.init, priority: face.meta?.priority ?? 0 }] : []
+    return source
+      ? [
+          {
+            source,
+            init: face.meta?.init,
+            priority: face.meta?.priority ?? 0,
+            wideCoverage: unicodeRangeCoverage(face.unicodeRange, characters.replace(/[\u0000-\u007f]/g, '')),
+            coverage: unicodeRangeCoverage(face.unicodeRange, characters),
+            index
+          }
+        ]
+      : []
   })
   const preferredPriority = Math.min(...candidates.map((candidate) => candidate.priority))
+  // The first buffer becomes the family's primary CanvasKit face, so it must cover the text.
+  candidates.sort(
+    (a, b) => b.wideCoverage - a.wideCoverage || b.coverage - a.coverage || a.index - b.index
+  )
   const seen = new Set<string>()
   const faces: Array<{ source: RemoteFontSource; init?: RequestInit }> = []
   for (const candidate of candidates) {
@@ -323,7 +360,7 @@ export class WebFontResolver {
         signal
       )
       signal?.throwIfAborted()
-      const faces = resolvedRemoteFaces(result)
+      const faces = resolvedRemoteFaces(result, characters)
       const buffers = await Promise.all(
         faces.map(async ({ source, init }) => {
           const response = await this.fetchRemote(source.url, { ...init, signal })

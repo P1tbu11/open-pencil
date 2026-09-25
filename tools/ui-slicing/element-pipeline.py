@@ -162,10 +162,11 @@ def split_alpha(layer: Image.Image, width: int, height: int) -> list[dict]:
         x, y, box_width, box_height, area = (int(value) for value in stats[index])
         if area < 300 or box_width < 8 or box_height < 8:
             continue
-        if box_width > width * 0.9 and box_height < height * 0.2:
-            continue
         crop = pixels[y : y + box_height, x : x + box_width].copy()
         crop[:, :, 3] = np.where(labels[y : y + box_height, x : x + box_width] == index, crop[:, :, 3], 0)
+        visible = crop[:, :, 3][crop[:, :, 3] > 24]
+        if (visible > 200).mean() < 0.2:
+            continue
         sprites.append({'x': x, 'y': y, 'width': box_width, 'height': box_height, 'image': Image.fromarray(crop)})
     return sprites
 

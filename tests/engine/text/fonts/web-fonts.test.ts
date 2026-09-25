@@ -2,11 +2,21 @@ import { describe, expect, test } from 'bun:test'
 
 import {
   normalizedCoverageText,
+  unicodeRangeCoverage,
   WebFontResolver,
   webFontSubsetsForText
 } from '@open-pencil/core/text'
 
 describe('web font coverage requests', () => {
+  test('counts distinct characters inside unicode-range subsets', () => {
+    const latin = ['U+0000-00FF', 'U+0131', 'U+2000-206F']
+    const chinese = ['U+4E00-9FFF', 'U+3000-303F']
+    expect(unicodeRangeCoverage(latin, '天天斗地主 3680')).toBe(5)
+    expect(unicodeRangeCoverage(chinese, '天天斗地主 3680')).toBe(4)
+    expect(unicodeRangeCoverage(['U+4??'], 'ѐ')).toBe(1)
+    expect(unicodeRangeCoverage(undefined, '天天斗')).toBe(2)
+  })
+
   test('normalizes coverage without splitting supplementary code points', () => {
     expect(normalizedCoverageText('界A界𠀀A')).toBe(normalizedCoverageText('A界𠀀'))
     expect(Array.from(normalizedCoverageText('𠀀'))).toEqual(['𠀀'])
