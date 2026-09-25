@@ -23,7 +23,7 @@ const origins = new Set(['http://127.0.0.1:1420', 'http://localhost:1420'])
 const workspaceRoot = await resolveWorkspaceRoot(import.meta.dir)
 const ocrBinary = join(workspaceRoot, 'scratch/ui-slice-ocr')
 const qwenPython = join(workspaceRoot, 'scratch/.venv/bin/python')
-const qwenScript = join(import.meta.dir, 'qwen-layered.py')
+const elementScript = join(import.meta.dir, 'element-pipeline.py')
 const qwenToken = join(homedir(), '.config/ui-slice-studio/modelscope-token.txt')
 const prompt = await Bun.file(join(import.meta.dir, 'detection-prompt.md')).text()
 async function recognizeText(source: v.InferOutput<typeof sourceSchema>) {
@@ -47,23 +47,38 @@ async function recognizeText(source: v.InferOutput<typeof sourceSchema>) {
   }
 }
 
-const qwenOutput = v.object({
+const elementOutput = v.object({
   width: v.number(),
   height: v.number(),
-  layers: v.array(v.object({ name: v.string(), path: v.string() }))
+  layers: v.array(
+    v.object({
+      name: v.string(),
+      kind: v.picklist(['image', 'text']),
+      x: v.number(),
+      y: v.number(),
+      width: v.number(),
+      height: v.number(),
+      z: v.number(),
+      path: v.optional(v.string()),
+      text: v.optional(v.string()),
+      fontSize: v.optional(v.number()),
+      fontFamily: v.optional(v.string()),
+      color: v.optional(v.string())
+    })
+  )
 })
 
-async function splitWithQwen(body: v.InferOutput<typeof bodySchema>, signal: AbortSignal) {
+async function splitElements(body: v.InferOutput<typeof bodySchema>, signal: AbortSignal) {
   if (!(await Bun.file(qwenPython).exists()))
-    throw new Error('分层客户端未安装，请先准备 scratch/.venv 里的 gradio_client 和 pillow')
-  const directory = await mkdtemp(join(tmpdir(), 'ui-slice-qwen-'))
+    throw new Error('分层客户端未安装，请先准备 scratch/.venv 里的抠图依赖')
+  const directory = await mkdtemp(join(tmpdir(), 'ui-slice-elements-'))
   try {
     const imagePath = join(directory, 'source')
     await Bun.write(imagePath, Buffer.from(body.source.dataURL.split(',')[1] ?? '', 'base64'))
-    const proc = Bun.spawn([qwenPython, qwenScript, imagePath, directory], {
-      stdout: 'pipe',
-      stderr: 'pipe'
-    })
+    const proc = Bun.spawn(
+      [qwenPython, elementScript, imagePath, directory, ocrBinary, join(import.meta.dir, 'detection-prompt.md')],
+      { stdout: 'pipe', stderr: 'pipe' }
+    )
     const stop = () => proc.kill()
     signal.addEventListener('abort', stop, { once: true })
     const [stdout, stderr, code] = await Promise.all([
@@ -72,23 +87,30 @@ async function splitWithQwen(body: v.InferOutput<typeof bodySchema>, signal: Abo
       proc.exited
     ])
     signal.removeEventListener('abort', stop)
-    if (signal.aborted) throw new Error('已取消千问分层')
+    if (signal.aborted) throw new Error('已取消分层')
     if (code !== 0) {
       const detail = stderr.trim().split('\n').at(-1)
-      throw new Error(detail || '千问分层失败，请稍后重试')
+      throw new Error(detail || '分层失败，请稍后重试')
     }
-    const parsed = v.parse(qwenOutput, JSON.parse(stdout))
+    const parsed = v.parse(elementOutput, JSON.parse(stdout))
     const layers = await Promise.all(
       parsed.layers.map(async (layer, index) => ({
-        id: `qwen-${index + 1}`,
+        id: `element-${index + 1}`,
         name: layer.name,
-        kind: 'image' as const,
-        x: 0,
-        y: 0,
-        width: body.source.width,
-        height: body.source.height,
-        z: index,
-        pngBase64: (await readFile(layer.path)).toString('base64')
+        kind: layer.kind,
+        x: layer.x,
+        y: layer.y,
+        width: layer.width,
+        height: layer.height,
+        z: layer.z,
+        ...(layer.kind === 'text'
+          ? {
+              text: layer.text,
+              fontSize: layer.fontSize,
+              fontFamily: layer.fontFamily,
+              color: layer.color
+            }
+          : { pngBase64: (await readFile(layer.path ?? '')).toString('base64') })
       }))
     )
     return { layers }
@@ -174,7 +196,7 @@ const server = Bun.serve({
       if (!worker) {
         if (!(await Bun.file(qwenToken).exists()))
           return json({ error: '尚未配置透明分层与背景补全服务；本地快速拆分可继续使用' }, 503)
-        return json(await splitWithQwen(body, signal))
+        return json(await splitElements(body, signal))
       }
       const response = await fetch(worker.replace(/\/$/, '') + '/split', {
         method: 'POST',

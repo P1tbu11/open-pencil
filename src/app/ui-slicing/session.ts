@@ -11,6 +11,7 @@ function createSession() {
     project: shallowRef<SliceProject>(),
     state: reactive({
       selectedId: '',
+      sourceNodeId: '',
       frameId: '',
       drawing: false,
       mode: 'controlled',

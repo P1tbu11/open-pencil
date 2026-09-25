@@ -5,6 +5,8 @@
 ### Added
 
 - UI Slice Studio: annotate game screenshots, recognize text locally on macOS, extract simple flat-background elements and import editable native layers with undo and portable project files.
+- UI Slice Studio can split the image selected on the canvas, without importing that file again.
+- One-click splitting uses ModelScope Qwen image layering and vision detection to place a filled background, separate transparent widgets, and editable text layers on the canvas.
 - Layered PSD and asset exports, a Godot 4 scene export, and initial Unity/Cocos import adapters. Cloud detection and semantic splitting use configurable services; Unity/Cocos editor acceptance is pending.
 
 ### Breaking changes

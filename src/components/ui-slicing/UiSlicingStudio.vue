@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import { getActiveEditorStore } from '@/app/editor/active-store'
 import { loadFont } from '@/app/editor/fonts'
+import { canvasImageNode, sourceFromCanvasImage } from '@/app/ui-slicing/canvas-source'
 import type { EngineTarget } from '@/app/ui-slicing/engines'
 import { importSliceResult } from '@/app/ui-slicing/import'
 import {
@@ -51,6 +52,7 @@ async function exportCurrent() {
   })
 }
 let controller: AbortController | undefined
+const canvasImage = computed(() => canvasImageNode(editor.graph, editor.state.selectedIds))
 const selected = computed(() =>
   project.value?.regions.find((region) => region.id === state.selectedId)
 )
@@ -80,8 +82,19 @@ function cancel() {
   controller?.abort()
   status.value = '已取消，已完成的画布不受影响'
 }
+let splittingSelection = false
 watch(open, (value) => {
-  if (!value) cancel()
+  if (!value) {
+    cancel()
+    return
+  }
+  if (splittingSelection) return
+  const node = canvasImage.value
+  if (!node || (state.sourceNodeId === node.id && project.value)) return
+  void useCanvasImage(node).catch((reason: unknown) => {
+    status.value = ''
+    error.value = reason instanceof Error ? reason.message : '无法读取画布图片'
+  })
 })
 onBeforeUnmount(cancel)
 async function run(action: (signal: AbortSignal) => Promise<void>) {
@@ -152,6 +165,56 @@ function addCentered() {
     color: '#ffffff'
   })
 }
+async function useCanvasImage(node: NonNullable<typeof canvasImage.value>) {
+  status.value = '正在读取画布上的图片…'
+  const source = await sourceFromCanvasImage(editor.graph, node)
+  project.value = { source, regions: [] }
+  state.sourceNodeId = node.id
+  state.selectedId = ''
+  state.frameId = ''
+  preview.value = ''
+  status.value = `已使用画布上的「${source.name}」，可以直接拆分`
+}
+async function splitSelected() {
+  const node = canvasImage.value
+  if (!node || busy.value) return
+  splittingSelection = true
+  error.value = ''
+  try {
+    await run(async (signal) => {
+      status.value = '正在读取画布上的图片…'
+      const source = await sourceFromCanvasImage(editor.graph, node)
+      project.value = { source, regions: [] }
+      state.sourceNodeId = node.id
+      state.selectedId = ''
+      state.frameId = ''
+      preview.value = ''
+      status.value = '正在识别元素、抠图并补全背景…'
+      const layers = await requestSlices(
+        { url: state.serviceUrl, token: state.serviceToken },
+        'split',
+        source,
+        [],
+        signal
+      )
+      const result: SliceResult = {
+        version: 1,
+        name: source.name,
+        width: source.width,
+        height: source.height,
+        layers
+      }
+      signal.throwIfAborted()
+      if (getActiveEditorStore() !== editor || project.value?.source !== source)
+        throw new Error('当前文档已切换，结果未写入画布，请重新开始')
+      project.value = { source, regions: [], result }
+      await placeResult(result, signal)
+      status.value = `已生成 ${result.layers.length} 个图层，可直接在画布上编辑`
+    })
+  } finally {
+    splittingSelection = false
+  }
+}
 async function upload(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
@@ -166,6 +229,7 @@ async function upload(event: Event) {
       throw new Error('工程中记录的尺寸与源图不一致')
     signal.throwIfAborted()
     project.value = next
+    state.sourceNodeId = ''
     state.selectedId = ''
     state.frameId = ''
     preview.value = ''
@@ -236,6 +300,7 @@ async function demo() {
         make('bag', '背包按钮', 'image', 43, 465, 170, 74, 3)
       ]
     }
+    state.sourceNodeId = ''
     state.selectedId = 'amount'
     state.frameId = ''
     preview.value = ''
@@ -281,7 +346,7 @@ async function generate(useAI: boolean) {
   const current = project.value
   if (!current) return
   await run(async (signal) => {
-    status.value = useAI ? '正在提取透明素材、去字与补全背景…' : '正在本地拆分…'
+    status.value = useAI ? '正在识别元素、抠图并补全背景…' : '正在本地拆分…'
     const result: SliceResult = useAI
       ? {
           version: 1,
@@ -373,6 +438,19 @@ async function saveSource() {
     <AppButton color="primary" variant="solid" data-test-id="ui-slicing-open" @click="open = true">
       <template #leading><icon-lucide-layers class="size-4" /></template>UI 拆分工作台
     </AppButton>
+    <AppButton
+      v-if="canvasImage && !busy"
+      color="primary"
+      variant="solid"
+      data-test-id="ui-slicing-selection"
+      @click="splitSelected"
+    >
+      拆分选中图片
+    </AppButton>
+    <AppButton v-if="busy && !open" @click="cancel">取消</AppButton>
+    <p v-if="!open && (error || status)" class="max-w-sm px-2 text-xs text-muted">
+      {{ error || status }}
+    </p>
   </div>
   <AppDialog
     v-model:open="open"
@@ -456,7 +534,7 @@ async function saveSource() {
       <icon-lucide-scan class="size-12 text-accent" />
       <h2 class="text-xl font-semibold text-surface">把界面拆开，继续创作</h2>
       <p class="max-w-md text-sm leading-6 text-muted">
-        导入游戏截图，识别或框选元素，再把图片和文字按原位放回画布。支持 PNG、JPG、WebP。
+        先在画布上选中一张图片，再拆分。也可以导入 PNG、JPG、WebP。
       </p>
       <AppButton color="primary" variant="solid" :disabled="busy" @click="demo"
         >用示例走一遍</AppButton
@@ -652,7 +730,7 @@ async function saveSource() {
     </div>
     <template #footer>
       <p role="status" aria-live="polite" class="mr-auto max-w-xl text-xs text-muted">
-        {{ status || '导入图片开始，或体验示例' }}
+        {{ status || '选中画布上的图片，或导入文件' }}
       </p>
       <AppButton v-if="busy" @click="cancel">取消任务</AppButton>
       <template v-else>
