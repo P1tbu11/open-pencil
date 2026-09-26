@@ -433,22 +433,32 @@ async function saveSource() {
 
 <template>
   <div
-    class="absolute top-4 left-1/2 z-20 -translate-x-1/2 rounded-xl border border-border bg-panel p-1 shadow-lg"
+    class="absolute top-4 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-1 rounded-xl border border-border bg-panel p-1 shadow-lg"
   >
-    <AppButton color="primary" variant="solid" data-test-id="ui-slicing-open" @click="open = true">
-      <template #leading><icon-lucide-layers class="size-4" /></template>UI 拆分工作台
-    </AppButton>
-    <AppButton
-      v-if="canvasImage && !busy"
-      color="primary"
-      variant="solid"
-      data-test-id="ui-slicing-selection"
-      @click="splitSelected"
+    <div class="flex items-center gap-1">
+      <AppButton
+        color="primary"
+        variant="solid"
+        data-test-id="ui-slicing-open"
+        @click="open = true"
+      >
+        <template #leading><icon-lucide-layers class="size-4" /></template>UI 拆分工作台
+      </AppButton>
+      <AppButton
+        v-if="canvasImage && !busy"
+        color="primary"
+        variant="solid"
+        data-test-id="ui-slicing-selection"
+        @click="splitSelected"
+      >
+        <template #leading><icon-lucide-scissors class="size-4" /></template>拆分选中图片
+      </AppButton>
+      <AppButton v-if="busy && !open" @click="cancel">取消</AppButton>
+    </div>
+    <p
+      v-if="!open && (error || status)"
+      class="max-w-sm px-2 pb-0.5 text-center text-xs text-muted"
     >
-      拆分选中图片
-    </AppButton>
-    <AppButton v-if="busy && !open" @click="cancel">取消</AppButton>
-    <p v-if="!open && (error || status)" class="max-w-sm px-2 text-xs text-muted">
       {{ error || status }}
     </p>
   </div>
