@@ -1,3 +1,4 @@
+import functools
 import json
 import subprocess
 import sys
@@ -16,6 +17,8 @@ MAX_TEXTS = 40
 LAMA_MODEL = Path.home() / '.cache/ui-slice-studio/lama_fp32.onnx'
 LAMA_URL = 'https://huggingface.co/Carve/LaMa-ONNX/resolve/main/lama_fp32.onnx'
 LAMA_SIZE = 512
+SALIENCY_MODEL = Path.home() / '.u2net/u2net.onnx'
+SALIENCY_URL = 'https://github.com/danielgatis/rembg/releases/download/v0.0.0/u2net.onnx'
 
 
 def main() -> None:
@@ -120,11 +123,14 @@ def assemble(image: Image.Image, qwen: list[dict], detected: list[dict], texts: 
     alphas = [alpha for alpha, _, _ in settled]
     erased = cv2.dilate(strokes, np.ones((5, 5), np.uint8), iterations=2) > 0
     covered = 1 - np.prod([1 - alpha for alpha in alphas], axis=0) if alphas else np.zeros((height, width))
-    background = restore_background(original, generated[0][:, :, :3], covered)
+    background = restore_background(original, generated[0][:, :, :3], covered).astype(np.float32)
+    exposed = [box for box in boxes if covered[box['y'] : box['y'] + box['height'], box['x'] : box['x'] + box['width']].mean() < 0.3]
+    whole = np.ones((height, width), bool)
+    frame = {'x': 0, 'y': 0, 'width': width, 'height': height}
+    sprites = carve_objects(background, np.ones((height, width)), covered, whole, frame, exposed)
     background_path = out / 'background.png'
-    Image.fromarray(background).save(background_path)
+    Image.fromarray(np.clip(background, 0, 255).astype(np.uint8)).save(background_path)
     layers = [{**qwen[0], 'path': str(background_path)}]
-    sprites = []
     beneath = generated[0][:, :, :3].copy()
     for index, alpha in enumerate(alphas):
         layer = generated[index + 1]
@@ -133,11 +139,11 @@ def assemble(image: Image.Image, qwen: list[dict], detected: list[dict], texts: 
         colors = source_colors(original, alpha, beneath, layer[:, :, :3], np.maximum(above, shaped))
         for circle in settled[index][2]:
             colors = ring_fill(colors, circle, erased | (visible[index] < 0.5))
-        sprites.extend(split_alpha(colors, alpha, boxes))
+        sprites.extend(split_alpha(colors, alpha, above, boxes))
         raw = layer[:, :, 3:4] / 255
         beneath = beneath * (1 - raw) + layer[:, :, :3] * raw
     sprites.sort(key=lambda item: item['width'] * item['height'], reverse=True)
-    sprites = [sprite for sprite in sprites if not mostly_text(sprite, texts)]
+    sprites = [sprite for sprite in drop_ghosts(sprites) if not mostly_text(sprite, texts)]
     for index, sprite in enumerate(sprites[:MAX_IMAGES]):
         box = {key: sprite[key] for key in ('x', 'y', 'width', 'height')}
         name = sprite_name(box, detected)
@@ -287,23 +293,42 @@ def fit_text_box(pixels, text: dict, blockers: list[dict]) -> None:
     text.update(x=grown_left, width=grown_right - grown_left)
 
 
-def lama_session():
+@functools.cache
+def model_session(path: Path, url: str):
     import onnxruntime
 
-    path = LAMA_MODEL
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
         partial = path.with_suffix('.part')
-        urllib.request.urlretrieve(LAMA_URL, partial)
+        urllib.request.urlretrieve(url, partial)
         partial.rename(path)
     return onnxruntime.InferenceSession(str(path), providers=['CPUExecutionProvider'])
 
 
-def lama_fill(image, strokes, texts: list[dict]):
+def saliency_session():
+    return model_session(SALIENCY_MODEL, SALIENCY_URL)
+
+
+def lama_patch(pixels, hole):
     import cv2
     import numpy as np
 
-    session = lama_session()
+    session = model_session(LAMA_MODEL, LAMA_URL)
+    height, width = hole.shape
+    image = cv2.resize(pixels, (LAMA_SIZE, LAMA_SIZE), interpolation=cv2.INTER_AREA)
+    mask = cv2.dilate(cv2.resize(hole, (LAMA_SIZE, LAMA_SIZE), interpolation=cv2.INTER_NEAREST), np.ones((3, 3), np.uint8))
+    output = session.run(
+        None,
+        {'image': (image.astype(np.float32) / 255).transpose(2, 0, 1)[None], 'mask': mask.astype(np.float32)[None, None]},
+    )[0][0].transpose(1, 2, 0)
+    output = cv2.resize(np.clip(output, 0, 255), (width, height), interpolation=cv2.INTER_CUBIC)
+    blend = cv2.GaussianBlur(cv2.dilate(hole, np.ones((3, 3), np.uint8)).astype(np.float32), (5, 5), 0)[:, :, None]
+    return (pixels * (1 - blend) + output * blend).astype(np.uint8)
+
+
+def lama_fill(image, strokes, texts: list[dict]):
+    import numpy as np
+
     height, width = strokes.shape
     result = image.copy()
     pending = strokes.copy()
@@ -318,20 +343,7 @@ def lama_fill(image, strokes, texts: list[dict]):
         hole = strokes[top : top + side, left : left + side]
         margin = side // 8
         pending[top + margin : top + side - margin, left + margin : left + side - margin] = 0
-        crop = result[top : top + side, left : left + side]
-        pixels = cv2.resize(crop, (LAMA_SIZE, LAMA_SIZE), interpolation=cv2.INTER_AREA)
-        mask = cv2.resize(hole, (LAMA_SIZE, LAMA_SIZE), interpolation=cv2.INTER_NEAREST)
-        mask = cv2.dilate(mask, np.ones((3, 3), np.uint8))
-        output = session.run(
-            None,
-            {
-                'image': (pixels.astype(np.float32) / 255).transpose(2, 0, 1)[None],
-                'mask': mask.astype(np.float32)[None, None],
-            },
-        )[0][0].transpose(1, 2, 0)
-        output = cv2.resize(np.clip(output, 0, 255), (side, side), interpolation=cv2.INTER_CUBIC)
-        blend = cv2.GaussianBlur(cv2.dilate(hole, np.ones((3, 3), np.uint8)).astype(np.float32), (5, 5), 0)[:, :, None]
-        result[top : top + side, left : left + side] = (crop * (1 - blend) + output * blend).astype(np.uint8)
+        result[top : top + side, left : left + side] = lama_patch(result[top : top + side, left : left + side], hole)
     return result
 
 
@@ -374,7 +386,10 @@ def settle_alpha(alpha, raw, strokes, texts: list[dict]):
                 rounds.append(ellipse)
             continue
         edge = stroke & (inside - guessed[top:bottom, left:right] > 0.2)
-        region[stroke] = guessed[top:bottom, left:right][stroke]
+        size = max(3, round(text['height'] * 0.2)) | 1
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size))
+        closed = cv2.morphologyEx(np.ascontiguousarray(alpha[top:bottom, left:right]), cv2.MORPH_CLOSE, kernel)
+        region[stroke] = np.minimum(guessed[top:bottom, left:right], np.maximum(closed, region))[stroke]
         region[edge] = inside[edge]
         shaped[top:bottom, left:right] |= edge
     return settled, shaped, rounds
@@ -473,26 +488,149 @@ def source_colors(original, alpha, beneath, generated, above):
     return np.clip(foreground * visible + generated * (1 - visible), 0, 255)
 
 
-def split_alpha(colors, alpha, boxes: list[dict]) -> list[dict]:
+def split_alpha(colors, alpha, above, boxes: list[dict]) -> list[dict]:
     import cv2
     import numpy as np
 
-    mask = (alpha > 0.1).astype(np.uint8)
-    closed = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8), iterations=1)
-    count, labels, stats, _ = cv2.connectedComponentsWithStats(closed, connectivity=8)
+    from scipy import ndimage
+
+    core = cv2.morphologyEx((alpha > 0.5).astype(np.uint8), cv2.MORPH_CLOSE, np.ones((3, 3), np.uint8))
+    count, labels = cv2.connectedComponents(core, connectivity=8)
+    distance, (rows, columns) = ndimage.distance_transform_edt(labels == 0, return_indices=True)
+    labels = np.where((alpha > 0.1) & (distance <= 12), labels[rows, columns], labels)
+    _, extra = cv2.connectedComponents(((alpha > 0.1) & (labels == 0)).astype(np.uint8), connectivity=8)
+    labels = np.where(extra > 0, extra + count, labels)
+    objects = ndimage.find_objects(labels)
+    alpha = alpha.copy()
     sprites = []
-    for index in range(1, count):
-        x, y, box_width, box_height, area = (int(value) for value in stats[index])
-        if area < 300 or box_width < 8 or box_height < 8:
+    for index, window in enumerate(objects, start=1):
+        if window is None:
             continue
+        top, bottom, left, right = window[0].start, window[0].stop, window[1].start, window[1].stop
         region = labels == index
-        visible = alpha[region & (alpha > 0.1)]
-        if (visible > 0.8).mean() < 0.2:
+        area = int(region[window].sum())
+        if area < 300 or right - left < 8 or bottom - top < 8:
             continue
-        component = {'x': x, 'y': y, 'width': box_width, 'height': box_height}
+        visible = alpha[region & (alpha > 0.1)]
+        if (visible > 0.8).mean() < 0.2 and np.median(visible) < 0.3:
+            continue
+        component = {'x': left, 'y': top, 'width': right - left, 'height': bottom - top}
+        hidden = cv2.dilate(((above[window] > 0.1) & region[window]).astype(np.uint8), np.ones((3, 3), np.uint8), iterations=4)
+        hidden &= region[window].astype(np.uint8)
+        solid = ndimage.binary_fill_holes((alpha[window] > 0.5) & region[window])
+        alpha[window] = np.where((hidden > 0) & solid, 1, alpha[window])
+        fill_base(colors, alpha, window, hidden, raise_only=True)
+        sprites.extend(carve_objects(colors, alpha, above, region, component, boxes))
         for part in split_by_boxes(region, alpha, component, boxes):
             sprites.append(sprite_from(colors, alpha, part))
     return [sprite for sprite in sprites if sprite]
+
+
+def drop_ghosts(sprites: list[dict]) -> list[dict]:
+    import numpy as np
+
+    def solid(sprite: dict) -> bool:
+        level = np.asarray(sprite['image'])[:, :, 3] / 255
+        return (level[level > 0.1] > 0.8).mean() >= 0.2
+
+    def iou(a: dict, b: dict) -> float:
+        shared = intersection(a, b)
+        return shared / max(1, a['width'] * a['height'] + b['width'] * b['height'] - shared)
+
+    def covers(outer: dict, inner: dict) -> bool:
+        larger = outer['width'] * outer['height'] > inner['width'] * inner['height'] * 2
+        return iou(outer, inner) >= 0.5 or (larger and contains(outer, inner) > 0.8)
+
+    solids = [sprite for sprite in sprites if solid(sprite)]
+    return [sprite for sprite in sprites if sprite in solids or not any(covers(other, sprite) for other in solids)]
+
+
+def carve_objects(colors, alpha, above, region, component: dict, boxes: list[dict]) -> list:
+    import cv2
+    import numpy as np
+
+    area = component['width'] * component['height']
+    candidates = [
+        box
+        for box in boxes
+        if contains(component, box) > 0.85
+        and 400 < box['width'] * box['height'] < area * 0.6
+        and not clean_cut(region, alpha, box)
+    ]
+    candidates.sort(key=lambda box: box['width'] * box['height'], reverse=True)
+    carved, parts = [], []
+    for box in candidates:
+        if any(overlap(box, other) > 0.3 for other in carved):
+            continue
+        top, left = box['y'], box['x']
+        window = (slice(top, top + box['height']), slice(left, left + box['width']))
+        try:
+            saliency = salient_mask(colors[window])
+        except Exception as error:
+            print(f'Saliency unavailable, skipping object carving: {error}', file=sys.stderr)
+            return parts
+        inside = region[window]
+        solid = (saliency > 0.5) & inside
+        coverage = solid.sum() / max(1, inside.sum())
+        if not 0.08 < coverage < 0.85:
+            continue
+        count, labels, stats, _ = cv2.connectedComponentsWithStats(solid.astype(np.uint8), connectivity=8)
+        largest = stats[1:, cv2.CC_STAT_AREA].max() if count > 1 else 0
+        keep = np.isin(labels, [i for i in range(1, count) if stats[i, cv2.CC_STAT_AREA] > largest * 0.05])
+        keep = cv2.dilate(keep.astype(np.uint8), np.ones((3, 3), np.uint8)) > 0
+        weight = np.clip((saliency - 0.3) / 0.4, 0, 1) * keep * inside
+        piece = np.zeros_like(region)
+        piece[window] = weight > 0.02
+        if above[window][weight > 0.5].mean() < 0.5:
+            piece_alpha = np.zeros_like(alpha)
+            piece_alpha[window] = alpha[window] * weight
+            parts.append(sprite_from(colors, piece_alpha, piece))
+        hole = cv2.dilate((weight > 0.02).astype(np.uint8), np.ones((3, 3), np.uint8), iterations=3) & inside.astype(np.uint8)
+        fill_base(colors, alpha, window, hole)
+        carved.append(box)
+    return parts
+
+
+def salient_mask(pixels):
+    import cv2
+    import numpy as np
+
+    session = saliency_session()
+    source = cv2.resize(np.clip(pixels, 0, 255).astype(np.float32) / 255, (320, 320), interpolation=cv2.INTER_AREA)
+    tensor = ((source - (0.485, 0.456, 0.406)) / (0.229, 0.224, 0.225)).transpose(2, 0, 1)[None].astype(np.float32)
+    output = session.run(None, {session.get_inputs()[0].name: tensor})[0][0, 0]
+    output = (output - output.min()) / max(float(output.max() - output.min()), 1e-6)
+    return cv2.resize(output, (pixels.shape[1], pixels.shape[0]), interpolation=cv2.INTER_LINEAR)
+
+
+def fill_base(colors, alpha, window, hole, raise_only: bool = False) -> None:
+    import cv2
+    import numpy as np
+
+    if not hole.any():
+        return
+    pixels = np.ascontiguousarray(np.clip(colors[window], 0, 255).astype(np.uint8))
+    filled = cv2.inpaint(pixels, hole * 255, 5, cv2.INPAINT_TELEA)
+    height, width = hole.shape
+    count, _, stats, _ = cv2.connectedComponentsWithStats(hole, connectivity=8)
+    try:
+        for index in range(1, count):
+            x, y, w, h, _ = (int(value) for value in stats[index])
+            side = min(max(w, h) * 3 // 2 + 16, width, height)
+            if side < max(w, h):
+                side = max(w, h)
+            left = int(np.clip(x + w / 2 - side / 2, 0, max(0, width - side)))
+            top = int(np.clip(y + h / 2 - side / 2, 0, max(0, height - side)))
+            crop = (slice(top, top + side), slice(left, left + side))
+            filled[crop] = lama_patch(filled[crop], hole[crop])
+    except Exception as error:
+        print(f'LaMa unavailable, keeping classic base fill: {error}', file=sys.stderr)
+    colors[window] = np.where(hole[:, :, None] > 0, filled, colors[window])
+    level = np.ascontiguousarray((alpha[window] * 255).astype(np.uint8))
+    guessed = cv2.inpaint(level, hole * 255, 5, cv2.INPAINT_TELEA) / 255
+    if raise_only:
+        guessed = np.maximum(guessed, alpha[window])
+    alpha[window] = np.where(hole > 0, guessed, alpha[window])
 
 
 def split_by_boxes(region, alpha, component: dict, boxes: list[dict]) -> list:
@@ -557,7 +695,8 @@ def sprite_name(box: dict, detected: list[dict]) -> str:
     named = [item for item in detected if item.get('kind') != 'text' and item.get('name') and overlap(box, item) > 0.3]
     if not named:
         return '控件'
-    named.sort(key=lambda item: overlap(box, item), reverse=True)
+    union = lambda item: box['width'] * box['height'] + item['width'] * item['height'] - intersection(box, item)
+    named.sort(key=lambda item: intersection(box, item) / max(1, union(item)), reverse=True)
     return str(named[0]['name'])[:40]
 
 
@@ -694,8 +833,11 @@ def ocr(binary: Path, image_path: Path) -> list[dict]:
 
 def merge_text(detected: list[dict], recognized: list[dict]) -> list[dict]:
     texts = [item for item in detected if item['kind'] == 'text' and item['text']]
+    graphics = [item for item in detected if item['kind'] != 'text']
     for item in recognized:
         if not item['text'] or any(overlap(item, existing) > 0.2 for existing in texts):
+            continue
+        if len(item['text'].strip()) <= 1 and any(overlap(item, graphic) > 0.6 for graphic in graphics):
             continue
         texts.append(item)
     return texts[:MAX_TEXTS]
