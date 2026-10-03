@@ -31,7 +31,7 @@ export async function requestSlices(
   }
   const response = await fetch(`${url.href.replace(/\/$/, '')}/${action}`, {
     method: 'POST',
-    signal: AbortSignal.any([signal, AbortSignal.timeout(300_000)]),
+    signal: AbortSignal.any([signal, AbortSignal.timeout(720_000)]),
     headers: {
       'Content-Type': 'application/json',
       ...(provider.token ? { Authorization: `Bearer ${provider.token}` } : {})

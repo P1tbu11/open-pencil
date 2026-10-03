@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { cp, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -24,6 +24,7 @@ const workspaceRoot = await resolveWorkspaceRoot(import.meta.dir)
 const ocrBinary = join(workspaceRoot, 'scratch/ui-slice-ocr')
 const qwenPython = join(workspaceRoot, 'scratch/.venv/bin/python')
 const elementScript = join(import.meta.dir, 'element-pipeline.py')
+const lastSplit = join(workspaceRoot, 'scratch/last-split')
 const qwenToken = join(homedir(), '.config/ui-slice-studio/modelscope-token.txt')
 const prompt = await Bun.file(join(import.meta.dir, 'detection-prompt.md')).text()
 async function recognizeText(source: v.InferOutput<typeof sourceSchema>) {
@@ -115,6 +116,8 @@ async function splitElements(body: v.InferOutput<typeof bodySchema>, signal: Abo
     )
     return { layers }
   } finally {
+    await rm(lastSplit, { recursive: true, force: true })
+    await cp(directory, lastSplit, { recursive: true }).catch(() => undefined)
     await rm(directory, { recursive: true, force: true })
   }
 }
@@ -189,7 +192,7 @@ const server = Bun.serve({
     try {
       const body = v.parse(bodySchema, await request.json())
       parseRegions({ version: 1, ...body.source, layers: body.regions })
-      const signal = AbortSignal.any([request.signal, AbortSignal.timeout(240_000)])
+      const signal = AbortSignal.any([request.signal, AbortSignal.timeout(660_000)])
       if (path === '/ocr') return json(await recognizeText(body.source))
       if (path === '/detect') return json(await detectVision(body, signal))
       const worker = process.env.SLICE_WORKER_URL
